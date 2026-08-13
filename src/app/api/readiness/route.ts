@@ -1,9 +1,9 @@
-import { env, isCloudConfigured } from "@/infrastructure/env";
+import { env, isPersistenceConfigured } from "@/infrastructure/env";
 import { createServerSupabase } from "@/infrastructure/supabase/server";
 import { createAdminClient } from "@/infrastructure/supabase/admin";
 
 export async function GET() {
-  if (!isCloudConfigured) return Response.json({ ready: false, mode: "demo", checks: { supabase: false, openai: Boolean(env.OPENAI_API_KEY), microsoft: Boolean(env.MICROSOFT_CLIENT_ID && env.MICROSOFT_CLIENT_SECRET), encryption: Boolean(env.CREDENTIAL_ENCRYPTION_KEY), jobs: Boolean(env.INTERNAL_JOB_SECRET && (env.CRON_SECRET || env.INTERNAL_JOB_SECRET)) } });
+  if (!isPersistenceConfigured) return Response.json({ ready: false, mode: "demo", checks: { supabase: false, openai: Boolean(env.OPENAI_API_KEY), microsoft: Boolean(env.MICROSOFT_CLIENT_ID && env.MICROSOFT_CLIENT_SECRET), encryption: Boolean(env.CREDENTIAL_ENCRYPTION_KEY), jobs: Boolean(env.INTERNAL_JOB_SECRET && (env.CRON_SECRET || env.INTERNAL_JOB_SECRET)) } });
   const supabase = await createServerSupabase();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: "Sign in is required." }, { status: 401 });

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { answerWithAlex, demoAnswer } from "@/agent/models/gateway";
-import { isCloudConfigured } from "@/infrastructure/env";
+import { isPersistenceConfigured } from "@/infrastructure/env";
 import { createServerSupabase } from "@/infrastructure/supabase/server";
 import { createAdminClient } from "@/infrastructure/supabase/admin";
 import { reconcileAuthenticatedEmailIdentity } from "@/domain/parties/authenticated-identity";
@@ -11,7 +11,7 @@ export async function POST(request: Request) {
   const parsed = inputSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "A valid message is required." }, { status: 400 });
   try {
-    if (!isCloudConfigured) return Response.json(demoAnswer(parsed.data.message));
+    if (!isPersistenceConfigured) return Response.json(demoAnswer(parsed.data.message));
     const supabase = await createServerSupabase();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return Response.json({ error: "Sign in is required." }, { status: 401 });
