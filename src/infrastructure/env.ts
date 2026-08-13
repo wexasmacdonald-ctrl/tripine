@@ -1,0 +1,18 @@
+import { z } from "zod";
+
+const serverSchema = z.object({
+  NEXT_PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
+  NEXT_PUBLIC_SUPABASE_URL: z.string().url().optional(),
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().optional(),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
+  OPENAI_API_KEY: z.string().optional(),
+  OPENAI_MODEL: z.string().default("gpt-5.4-nano"),
+  MICROSOFT_TENANT_ID: z.string().default("organizations"),
+  MICROSOFT_CLIENT_ID: z.string().optional(),
+  MICROSOFT_CLIENT_SECRET: z.string().optional(),
+  MICROSOFT_REDIRECT_URI: z.string().url().optional(),
+  MICROSOFT_GRAPH_CLIENT_STATE: z.string().min(24).optional(),
+  INTERNAL_JOB_SECRET: z.string().min(24).optional(),
+});
+export const env = serverSchema.parse(process.env);
+export const isCloudConfigured = Boolean(env.NEXT_PUBLIC_SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY && env.MICROSOFT_CLIENT_ID);
