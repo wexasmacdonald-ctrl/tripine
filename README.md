@@ -29,6 +29,10 @@ Import this repository into Vercel. See [docs/cloud-setup.md](docs/cloud-setup.m
 - Deterministic participation and outbound approval policy.
 - Microsoft OAuth/PKCE and Graph client boundaries.
 - Basic Graph webhook validation and durable Supabase delivery inbox.
+- Encrypted Microsoft access/refresh-token persistence and refresh rotation.
+- Automatic Outlook subscription creation and daily renewal.
+- Live inbound Outlook processing, participant/thread resolution, Graph mail/file research, and narrow internal auto-replies.
+- Supabase authentication and cross-channel retrieval of email history, tasks, commitments, and events.
 - Tenant-scoped Supabase schema for parties, conversations, interactions, memory, tasks, commitments, events, and approvals.
 
-Live Microsoft token persistence and background inbox processing remain deliberately disabled until encrypted credential storage is wired to a deployed Supabase project.
+Apply the migration and provide the cloud environment variables before connecting real accounts. Never place credentials in this repository.

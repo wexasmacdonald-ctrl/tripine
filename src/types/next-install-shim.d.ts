@@ -6,13 +6,19 @@ declare module "next" {
 }
 
 declare module "next/headers" {
-  interface CookieOptions { httpOnly?: boolean; secure?: boolean; sameSite?: "lax" | "strict" | "none"; maxAge?: number; path?: string }
+  interface CookieOptions { httpOnly?: boolean; secure?: boolean; sameSite?: boolean | "lax" | "strict" | "none"; maxAge?: number; path?: string; [key: string]: unknown }
   interface CookieStore {
     get(name: string): { name: string; value: string } | undefined;
     set(name: string, value: string, options?: CookieOptions): void;
     delete(name: string): void;
+    getAll(): Array<{ name: string; value: string }>;
+    set(name: string, value: string, options?: CookieOptions & Record<string, unknown>): void;
   }
   export function cookies(): Promise<CookieStore>;
+}
+
+declare module "next/server" {
+  export function after(callback: () => void | Promise<void>): void;
 }
 
 declare module "next/font/google" {

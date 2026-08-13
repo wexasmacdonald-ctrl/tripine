@@ -1,37 +1,115 @@
-# Cloud setup
+# Real-credential cloud setup
 
-## 1. Deploy the web application
+Do not commit secrets. Enter them only in Vercel and the relevant provider dashboards.
 
-Import `wexasmacdonald-ctrl/tripine` into Vercel. The app deploys immediately in demo mode with no environment variables.
+## 1. Microsoft 365 demo tenant
 
-## 2. Create Supabase
+Create or use a controlled Microsoft 365 Business tenant and provision:
 
-Create a Supabase project, run `supabase/migrations/202608130001_initial_tripine.sql`, then run `supabase/seed.sql`. Create the Connor user in Supabase Auth and insert its `organization_members` row manually.
+- `alex@YOUR_DOMAIN`: licensed Exchange Online mailbox, OneDrive, and access to the demo SharePoint site.
+- `connor@YOUR_DOMAIN`: licensed mailbox used to email Alex and a matching Tripine login.
+- An optional controlled external mailbox representing Sarah.
 
-Add the project URL, publishable key, and service-role key to Vercel. The service-role key is server-only and must never use the `NEXT_PUBLIC_` prefix.
+Create a SharePoint site with realistic synthetic ABC Manufacturing documents. Add quote versions and grant Alex normal user access. Seed Outlook threads between the controlled accounts.
 
-## 3. Add OpenAI
+## 2. Supabase
 
-Create an API project with a low spend limit and add `OPENAI_API_KEY`. `OPENAI_MODEL` defaults to `gpt-5.4-nano`. Responses use `store: false`; Tripine remains the canonical state store.
+Create a project and run `supabase/migrations/202608130001_initial_tripine.sql`, followed by `supabase/seed.sql`, in the SQL editor.
 
-## 4. Register Microsoft Entra application
+In Authentication, create Connor with email/password and copy his user UUID. In SQL, run:
 
-Create a Web app registration. Add this redirect URI:
+```sql
+with org as (select id from public.organizations where slug = 'demo-company'),
+connor as (
+  insert into public.parties (organization_id, kind, display_name, is_internal)
+  select id, 'human', 'Connor', true from org
+  returning id, organization_id
+)
+insert into public.organization_members (organization_id, user_id, party_id, role)
+select organization_id, 'REPLACE_WITH_AUTH_USER_UUID'::uuid, id, 'owner' from connor;
+```
+
+Copy the project URL, publishable key, and a new `sb_secret_...` key. The secret key stays server-side and bypasses RLS; never use a `NEXT_PUBLIC_` name for it.
+
+## 3. OpenAI
+
+Create an API project with a small spend limit. Copy its API key. Tripine calls the Responses API with `store: false`; Supabase remains the application state store.
+
+## 4. Microsoft Entra application
+
+Create a Web app registration in the demo tenant. Use single-tenant access if this tenant alone will be tested.
+
+Add the production redirect URI:
 
 `https://YOUR_VERCEL_DOMAIN/api/connections/microsoft/callback`
 
-Grant delegated permissions `User.Read`, `Mail.Read`, `Mail.Send`, and `Files.Read.All`. Add the client ID, tenant ID, client secret, and exact redirect URI to Vercel.
+Add delegated Microsoft Graph permissions:
 
-Create strong random values for `MICROSOFT_GRAPH_CLIENT_STATE` and `INTERNAL_JOB_SECRET`.
+- `User.Read`
+- `Mail.Read`
+- `Mail.Send`
+- `Files.Read.All`
 
-The webhook URL is:
+Grant tenant admin consent if required. Create a client secret and copy its value immediately.
 
-`https://YOUR_VERCEL_DOMAIN/api/webhooks/microsoft/graph`
+## 5. Vercel
 
-## 5. Activate live mailbox processing
+Import `wexasmacdonald-ctrl/tripine`. Add all variables from `.env.example` for Production:
 
-The webhook validates Graph and persists notification envelopes. Before enabling real mailbox automation, add the encrypted token repository, create Alex's Graph subscription, and enable the delivery processor. The current callback verifies OAuth but intentionally does not persist plaintext credentials.
+- `NEXT_PUBLIC_APP_URL=https://YOUR_VERCEL_DOMAIN`
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+- `SUPABASE_SECRET_KEY`
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL=gpt-5.4-nano`
+- `MICROSOFT_TENANT_ID` (the tenant GUID)
+- `MICROSOFT_CLIENT_ID`
+- `MICROSOFT_CLIENT_SECRET`
+- `MICROSOFT_REDIRECT_URI=https://YOUR_VERCEL_DOMAIN/api/connections/microsoft/callback`
+- `MICROSOFT_GRAPH_CLIENT_STATE` (at least 32 random characters)
+- `INTERNAL_JOB_SECRET` (at least 32 random characters)
+- `CRON_SECRET` (at least 32 random characters; Vercel attaches this to cron calls)
+- `CREDENTIAL_ENCRYPTION_KEY` (exactly 32 random bytes encoded as base64)
+- `DEMO_ORGANIZATION_SLUG=demo-company`
+- `DEMO_AGENT_EMAIL=alex@YOUR_DOMAIN`
 
-## Environment variables
+Generate safe values in PowerShell:
 
-Copy every variable from `.env.example` into Vercel. Redeploy after changing them.
+```powershell
+$bytes = New-Object byte[] 32
+[Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+[Convert]::ToBase64String($bytes)
+```
+
+Generate separate values for the encryption key and each request secret. Redeploy after saving variables.
+
+## 6. Connect Alex
+
+Open:
+
+`https://YOUR_VERCEL_DOMAIN/api/connections/microsoft/start`
+
+Sign in specifically as Alex and consent. Tripine rejects a different mailbox when `DEMO_AGENT_EMAIL` is configured. The callback encrypts the renewable credential, stores the service-owned connection, and creates an Inbox subscription.
+
+Verify:
+
+- `/api/health` reports `connected` mode.
+- `connections` contains Alex with `status = connected`.
+- `connection_credentials` contains ciphertext, never plaintext tokens.
+- `graph_subscriptions` contains an active Inbox subscription.
+
+## 7. End-to-end test
+
+1. Email Alex from Connor with Alex in `To`: ask about ABC and Sarah's reply.
+2. Confirm `inbound_deliveries` becomes `processed`.
+3. Confirm one inbound interaction and `email.received` event appear.
+4. Confirm Graph search finds controlled Outlook and SharePoint evidence.
+5. Confirm Alex replies as Alex. This auto-reply is allowed only for a verified same-domain sender, direct `To`, and no attachment.
+6. Sign into Tripine as Connor and ask, “What happened with ABC?” The answer should use the persisted email interaction and activity.
+7. CC Alex without directly delegating. Confirm Alex records the message but does not reply.
+
+If background processing fails, invoke `POST /api/internal/graph/process` with `Authorization: Bearer INTERNAL_JOB_SECRET` and inspect `inbound_deliveries.last_error`.
+
+## Current safety boundary
+
+External recipients, forwards, attachments, changed recipients, and commitment-bearing messages are not auto-sent. The schema and policy layer support approvals, but the approval UI/executor remains the next live-test milestone.

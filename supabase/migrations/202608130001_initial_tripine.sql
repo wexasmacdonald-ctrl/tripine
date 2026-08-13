@@ -92,10 +92,11 @@ create table public.connections (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+create unique index connections_provider_account_idx on public.connections (organization_id, provider, provider_account_id);
 
 create schema if not exists private;
 revoke all on schema private from public, anon, authenticated;
-create table private.connection_credentials (
+create table public.connection_credentials (
   connection_id uuid primary key references public.connections(id) on delete cascade,
   ciphertext text not null,
   iv text not null,
@@ -103,6 +104,8 @@ create table private.connection_credentials (
   key_version integer not null,
   updated_at timestamptz not null default now()
 );
+alter table public.connection_credentials enable row level security;
+revoke all on public.connection_credentials from anon, authenticated;
 
 create table public.conversations (
   id uuid primary key default gen_random_uuid(),
@@ -313,3 +316,8 @@ create policy interaction_participant_read on public.interaction_participants fo
 
 -- Writes go through authenticated server services for the feasibility demo. The browser has no direct write policies.
 revoke all on all tables in schema private from anon, authenticated;
+grant select on public.organizations, public.organization_members, public.parties, public.party_identities,
+  public.agents, public.companies, public.relationships, public.connections, public.conversations,
+  public.channel_threads, public.interactions, public.interaction_participants, public.interaction_attachments,
+  public.memory_records, public.tasks, public.commitments, public.agent_capability_policies,
+  public.agent_events, public.approval_requests to authenticated;
