@@ -9,6 +9,20 @@ export type GraphMessage = {
   attachments?: Array<{ id: string; name?: string; contentType?: string; size?: number }>;
 };
 
+export function isAutomatedMessage(raw: GraphMessage) {
+  const headers = new Map((raw.internetMessageHeaders ?? []).map((header) => [header.name.toLowerCase(), header.value.toLowerCase()]));
+  const sender = raw.from?.emailAddress?.address?.toLowerCase() ?? "";
+  const autoSubmitted = headers.get("auto-submitted");
+  const precedence = headers.get("precedence");
+  return Boolean(
+    (autoSubmitted && autoSubmitted !== "no") ||
+    precedence === "bulk" ||
+    precedence === "junk" ||
+    precedence === "list" ||
+    /(^|[._-])(no-?reply|mailer-daemon|postmaster)([+@._-]|$)/i.test(sender),
+  );
+}
+
 function participant(value: GraphRecipient, role?: "to" | "cc" | "bcc", verifiedAddresses: string[] = []) {
   const address = value.emailAddress?.address?.toLowerCase() ?? "unknown";
   return { name: value.emailAddress?.name, address, role, verifiedInternal: verifiedAddresses.includes(address) };

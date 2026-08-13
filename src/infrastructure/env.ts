@@ -18,6 +18,7 @@ const serverSchema = z.object({
   CREDENTIAL_ENCRYPTION_KEY: z.string().optional(),
   DEMO_ORGANIZATION_SLUG: z.string().default("demo-company"),
   DEMO_AGENT_EMAIL: z.string().email().optional(),
+  DEMO_INTERNAL_EMAILS: z.string().optional(),
   DEMO_ALLOWED_RECIPIENTS: z.string().optional(),
 });
 export const env = serverSchema.parse(process.env);

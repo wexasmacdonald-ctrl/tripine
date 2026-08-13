@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { OutlookEmailChannelAdapter, type GraphMessage } from "../src/channels/outlook/adapter";
+import { isAutomatedMessage, OutlookEmailChannelAdapter, type GraphMessage } from "../src/channels/outlook/adapter";
 
 const context = { organizationId: "org", agentId: "agent", agentAddress: "alex@tripine.onmicrosoft.com", verifiedInternalAddresses: ["alex@tripine.onmicrosoft.com", "connor@tripine.onmicrosoft.com"] };
 
@@ -43,5 +43,11 @@ describe("OutlookEmailChannelAdapter", () => {
     expect(interaction.forwardedSegments[0]?.content).toContain("Prices rise 8%");
     expect(interaction.forwardedSegments[0]?.confidence).toBeLessThan(1);
     expect(interaction.attachments[0]).toMatchObject({ id: "a1", name: "pricing.pdf", size: 4200 });
+  });
+
+  it("detects automated messages that must never trigger a reply loop", () => {
+    expect(isAutomatedMessage(message({ internetMessageHeaders: [{ name: "Auto-Submitted", value: "auto-generated" }] }))).toBe(true);
+    expect(isAutomatedMessage(message({ from: { emailAddress: { address: "no-reply@example.com" } } }))).toBe(true);
+    expect(isAutomatedMessage(message())).toBe(false);
   });
 });

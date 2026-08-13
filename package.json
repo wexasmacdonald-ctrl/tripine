@@ -9,7 +9,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "check": "npm run lint; npm run test; npm run build",
-    "verify:env": "node scripts/verify-environment.mjs"
+    "verify:env": "node --env-file-if-exists=.env.local scripts/verify-environment.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "0.12.4",

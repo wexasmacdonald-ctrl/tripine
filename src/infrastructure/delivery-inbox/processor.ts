@@ -3,9 +3,17 @@ import { createAdminClient } from "@/infrastructure/supabase/admin";
 import { getValidMicrosoftToken } from "@/connectors/microsoft/auth/connection-store";
 import { graphFetch } from "@/connectors/microsoft/graph/client";
 import { composeEmployeeReply, researchMicrosoftContext } from "@/connectors/microsoft/graph/research";
-import { OutlookEmailChannelAdapter, type GraphMessage } from "@/channels/outlook/adapter";
+import { isAutomatedMessage, OutlookEmailChannelAdapter, type GraphMessage } from "@/channels/outlook/adapter";
 import { enforceParticipationPolicy, type ParticipationAssessment } from "@/agent/participation/policy";
 import { linkMentionedCompanies } from "@/domain/business-context/entity-context";
+import { env } from "@/infrastructure/env";
+
+function configuredInternalAddresses() {
+  return (env.DEMO_INTERNAL_EMAILS ?? "")
+    .split(",")
+    .map((address) => address.trim().toLowerCase())
+    .filter(Boolean);
+}
 
 async function resolveParty(supabase: ReturnType<typeof createAdminClient>, organizationId: string, participant: { address: string; name?: string; verifiedInternal: boolean }) {
   const { data: existing } = await supabase.from("party_identities").select("party_id").eq("organization_id", organizationId).eq("channel", "email").eq("address", participant.address).maybeSingle();
@@ -32,7 +40,10 @@ export async function processInboundDelivery(deliveryId: string) {
     const accessToken = await getValidMicrosoftToken(connection.id);
     const message = await graphFetch<GraphMessage>(accessToken, `/me/messages/${encodeURIComponent(delivery.provider_resource_id)}?$select=id,conversationId,internetMessageId,subject,from,toRecipients,ccRecipients,bccRecipients,body,receivedDateTime,hasAttachments,internetMessageHeaders&$expand=attachments($select=id,name,contentType,size)`);
     const { data: verifiedIdentityRows } = await supabase.from("party_identities").select("address,parties!inner(is_internal)").eq("organization_id", connection.organization_id).eq("channel", "email").eq("verified", true).eq("parties.is_internal", true);
-    const verifiedInternalAddresses = (verifiedIdentityRows ?? []).map((row) => row.address as string);
+    const verifiedInternalAddresses = [...new Set([
+      ...(verifiedIdentityRows ?? []).map((row) => (row.address as string).toLowerCase()),
+      ...configuredInternalAddresses(),
+    ])];
     const adapter = new OutlookEmailChannelAdapter();
     const interaction = await adapter.normalizeInbound(message, { organizationId: connection.organization_id, agentId: agent.id, agentAddress: connection.account_address, verifiedInternalAddresses });
     if (interaction.sender.address === connection.account_address.toLowerCase()) { await supabase.from("inbound_deliveries").update({ status: "processed", processed_at: new Date().toISOString() }).eq("id", deliveryId); return; }
@@ -58,7 +69,7 @@ export async function processInboundDelivery(deliveryId: string) {
     if (assessment.mayCreateTask) await supabase.from("tasks").upsert({ organization_id: connection.organization_id, agent_id: agent.id, description: interaction.content.trim().slice(0, 500), assigned_by_party_id: senderPartyId, assigned_to_party_id: connection.owner_party_id, source_interaction_id: stored.id }, { onConflict: "source_interaction_id", ignoreDuplicates: true });
     const publicCommitment = interaction.sender.verifiedInternal && interaction.participation.explicitMention && /\b(alex|he)\s+(?:will|'ll)\b/i.test(interaction.content);
     if (publicCommitment) await supabase.from("commitments").upsert({ organization_id: connection.organization_id, agent_id: agent.id, description: interaction.content.trim().slice(0, 500), committed_by_party_id: senderPartyId, expected_executor_party_id: connection.owner_party_id, external_party_aware: interaction.recipients.some((value) => !value.verifiedInternal), source_interaction_id: stored.id }, { onConflict: "source_interaction_id", ignoreDuplicates: true });
-    const mayAutoReply = assessment.shouldRespond && interaction.sender.verifiedInternal && interaction.participation.agentWasToRecipient && !interaction.participation.agentWasCcRecipient && !message.hasAttachments && interaction.forwardedSegments.length === 0;
+    const mayAutoReply = assessment.shouldRespond && interaction.sender.verifiedInternal && interaction.participation.agentWasToRecipient && !interaction.participation.agentWasCcRecipient && !message.hasAttachments && interaction.forwardedSegments.length === 0 && !isAutomatedMessage(message);
     if (mayAutoReply) {
       const { data: priorReplyAttempt } = await supabase.from("agent_events").select("id").eq("agent_id", agent.id).eq("interaction_id", stored.id).eq("action", "email.reply").maybeSingle();
       if (priorReplyAttempt) {

@@ -8,7 +8,12 @@ export async function POST(request: Request) {
   if (validationToken) return new Response(validationToken, { status: 200, headers: { "content-type": "text/plain" } });
   const payload = await request.json().catch(() => null) as { value?: Array<{ subscriptionId?: string; clientState?: string; tenantId?: string; resourceData?: { id?: string }; lifecycleEvent?: string }> } | null;
   if (!payload?.value) return new Response(null, { status: 202 });
-  const accepted = payload.value.filter((item) => item.clientState && item.clientState === env.MICROSOFT_GRAPH_CLIENT_STATE);
+  const expectedTenant = env.MICROSOFT_TENANT_ID.toLowerCase();
+  const accepted = payload.value.filter((item) =>
+    item.clientState &&
+    item.clientState === env.MICROSOFT_GRAPH_CLIENT_STATE &&
+    (expectedTenant === "organizations" || item.tenantId?.toLowerCase() === expectedTenant),
+  );
   if (accepted.length && env.NEXT_PUBLIC_SUPABASE_URL && (env.SUPABASE_SECRET_KEY || env.SUPABASE_SERVICE_ROLE_KEY)) {
     const supabase = createAdminClient();
     const subscriptionIds = [...new Set(accepted.map((item) => item.subscriptionId).filter((value): value is string => Boolean(value)))];

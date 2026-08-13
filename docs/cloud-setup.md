@@ -74,6 +74,7 @@ Import `wexasmacdonald-ctrl/tripine`. Add all variables from `.env.example` for 
 - `CREDENTIAL_ENCRYPTION_KEY` (exactly 32 random bytes encoded as base64)
 - `DEMO_ORGANIZATION_SLUG=demo-company`
 - `DEMO_AGENT_EMAIL=alex@YOUR_DOMAIN`
+- `DEMO_INTERNAL_EMAILS` (comma-separated exact employee mailbox addresses; for this demo, Alex and Connor)
 - `DEMO_ALLOWED_RECIPIENTS` (comma-separated exact addresses controlled by you, including Connor and the Sarah test address)
 
 Generate safe values in PowerShell:
