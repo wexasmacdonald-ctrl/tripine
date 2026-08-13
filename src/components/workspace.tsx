@@ -1,8 +1,15 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 
 type Message = { id: string; role: "user" | "agent"; text: string; source?: string };
+type WorkspaceData = {
+  connections?: Array<{ id: string; status: string; account_address?: string }>;
+  tasks?: Array<{ id: string; description: string; status: string }>;
+  commitments?: Array<{ id: string; description: string; status: string; external_party_aware: boolean }>;
+  events?: Array<{ id: string; action: string; status: string; reason?: string; created_at: string }>;
+  approvals?: Array<{ id: string; action: string; payload: { to?: string[]; subject?: string; body?: string }; status: string }>;
+};
 
 const initial: Message[] = [
   {
@@ -17,6 +24,25 @@ export function Workspace({ configured }: { configured: boolean }) {
   const [messages, setMessages] = useState(initial);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [conversationId, setConversationId] = useState<string>();
+  const [workspace, setWorkspace] = useState<WorkspaceData>({});
+  const [draftOpen, setDraftOpen] = useState(false);
+  const [draft, setDraft] = useState({ to: "", subject: "", body: "" });
+
+  const refreshWorkspace = useCallback(async () => {
+    if (!configured) return;
+    const response = await fetch("/api/workspace", { cache: "no-store" });
+    if (response.ok) setWorkspace(await response.json() as WorkspaceData);
+  }, [configured]);
+
+  useEffect(() => {
+    if (!configured) return;
+    let active = true;
+    void fetch("/api/workspace", { cache: "no-store" }).then(async (response) => {
+      if (active && response.ok) setWorkspace(await response.json() as WorkspaceData);
+    });
+    return () => { active = false; };
+  }, [configured]);
 
   async function send(event: FormEvent) {
     event.preventDefault();
@@ -29,17 +55,35 @@ export function Workspace({ configured }: { configured: boolean }) {
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({ message: text, conversationId }),
       });
-      const data = (await response.json()) as { answer?: string; source?: string; error?: string };
+      const data = (await response.json()) as { answer?: string; source?: string; error?: string; conversationId?: string };
+      if (data.conversationId) setConversationId(data.conversationId);
       setMessages((current) => [
         ...current,
         { id: crypto.randomUUID(), role: "agent", text: data.answer ?? data.error ?? "I couldn’t complete that.", source: data.source },
       ]);
+      void refreshWorkspace();
     } finally {
       setBusy(false);
     }
   }
+
+  async function requestApproval(event: FormEvent) {
+    event.preventDefault();
+    const response = await fetch("/api/approvals", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ to: [draft.to], cc: [], subject: draft.subject, body: draft.body }) });
+    if (response.ok) { setDraft({ to: "", subject: "", body: "" }); setDraftOpen(false); await refreshWorkspace(); }
+  }
+
+  async function approve(id: string) {
+    const response = await fetch(`/api/approvals/${id}/approve`, { method: "POST" });
+    const data = await response.json() as { error?: string };
+    if (!response.ok) setMessages((current) => [...current, { id: crypto.randomUUID(), role: "agent", text: data.error ?? "The approved email could not be sent." }]);
+    await refreshWorkspace();
+  }
+
+  const connected = configured && workspace.connections?.some((item) => item.status === "connected");
+  const openWork = [...(workspace.tasks ?? []).map((item) => ({ ...item, kind: "Task" })), ...(workspace.commitments ?? []).map((item) => ({ ...item, kind: item.external_party_aware ? "External commitment" : "Commitment" }))];
 
   return (
     <div className="shell">
@@ -59,7 +103,7 @@ export function Workspace({ configured }: { configured: boolean }) {
       <main className="main">
         <header className="topbar">
           <div><div className="eyebrow">Demo Company · AI employee</div><h1>Work with Alex</h1><p className="subtitle">Email or chat—Alex keeps the same context.</p></div>
-          <div className="connection"><span className={`dot ${configured ? "live" : ""}`} />{configured ? "Microsoft 365 connected" : "Demo mode"}</div>
+          <div className="connection"><span className={`dot ${connected ? "live" : ""}`} />{connected ? `Microsoft 365 · ${workspace.connections?.[0]?.account_address ?? "Alex"}` : configured ? "Microsoft 365 setup needed" : "Demo mode"}</div>
         </header>
         <div className="grid">
           <section className="card chat">
@@ -75,14 +119,19 @@ export function Workspace({ configured }: { configured: boolean }) {
           </section>
           <aside className="rail">
             <section className="card section"><h2>Open work</h2>
-              <div className="item"><div className="icon">✓</div><div><p>Confirm installation scope for ABC</p><small>Assigned by Connor</small><br /><span className="taskStatus">Waiting</span></div></div>
-              <div className="item"><div className="icon">↗</div><div><p>Send revised quote to Sarah</p><small>External commitment · Friday</small><br /><span className="taskStatus">Approval needed</span></div></div>
+              {(configured ? openWork : [{ id: "demo-task", description: "Confirm installation scope for ABC", status: "waiting", kind: "Task" }, { id: "demo-commitment", description: "Send revised quote to Sarah", status: "waiting", kind: "External commitment" }]).map((item) => <div className="item" key={item.id}><div className="icon">{item.kind === "Task" ? "✓" : "↗"}</div><div><p>{item.description}</p><small>{item.kind}</small><br /><span className="taskStatus">{item.status}</span></div></div>)}
+              {configured && openWork.length === 0 && <p className="empty">No open tasks or commitments.</p>}
             </section>
             <section className="card section"><h2>Recent activity</h2>
-              <div className="item"><div className="icon">✉</div><div><p>Read Sarah’s reply</p><small>Outlook · yesterday</small></div></div>
-              <div className="item"><div className="icon">⌕</div><div><p>Found latest ABC quote</p><small>SharePoint · Quote v3</small></div></div>
+              {(configured ? workspace.events ?? [] : [{ id: "demo-email", action: "Read Sarah's reply", status: "success", reason: "Outlook · yesterday", created_at: "" }, { id: "demo-file", action: "Found latest ABC quote", status: "success", reason: "SharePoint · Quote v3", created_at: "" }]).slice(0, 5).map((item) => <div className="item" key={item.id}><div className="icon">{item.action.includes("email") ? "✉" : "⌕"}</div><div><p>{item.action.replaceAll(".", " ")}</p><small>{item.reason ?? item.status}</small></div></div>)}
             </section>
-            {!configured && <section className="card section setup"><h2>Cloud setup required</h2><p>The product is running with deterministic demo data. Add Supabase, OpenAI, and Microsoft credentials in Vercel to activate live integrations.</p><a href="/api/connections/microsoft/start">Connect Microsoft 365 →</a></section>}
+            {configured && <section className="card section"><div className="sectionTitle"><h2>External actions</h2><button className="textButton" onClick={() => setDraftOpen((value) => !value)}>Draft email</button></div>
+              {draftOpen && <form className="draftForm" onSubmit={requestApproval}><input type="email" required placeholder="Recipient email" value={draft.to} onChange={(event) => setDraft({ ...draft, to: event.target.value })} /><input required placeholder="Subject" value={draft.subject} onChange={(event) => setDraft({ ...draft, subject: event.target.value })} /><textarea required placeholder="Message from Alex" value={draft.body} onChange={(event) => setDraft({ ...draft, body: event.target.value })} /><button className="primary">Request approval</button></form>}
+              {(workspace.approvals ?? []).map((item) => <div className="approval" key={item.id}><strong>{item.payload.subject}</strong><small>To {item.payload.to?.join(", ")}</small><p>{item.payload.body}</p><button className="approveButton" onClick={() => approve(item.id)}>Approve exact email</button></div>)}
+              {!draftOpen && (workspace.approvals ?? []).length === 0 && <p className="empty">No external actions awaiting approval.</p>}
+            </section>}
+            {!configured && <section className="card section setup"><h2>Cloud setup required</h2><p>The product is running with deterministic demo data. Add Supabase, OpenAI, and Microsoft credentials in Vercel to activate live integrations.</p></section>}
+            {configured && !connected && <section className="card section setup"><h2>Connect Alex&apos;s workplace</h2><p>Sign in as Alex to activate Outlook and SharePoint.</p><a href="/api/connections/microsoft/start">Connect Microsoft 365 →</a></section>}
           </aside>
         </div>
       </main>

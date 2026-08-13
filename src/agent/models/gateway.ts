@@ -9,7 +9,7 @@ export async function answerWithAlex(message: string, organizationalContext?: un
   return { answer: response.output_text, source: "Tripine organizational context" };
 }
 
-function demoAnswer(message: string) {
+export function demoAnswer(message: string) {
   const lower = message.toLowerCase();
   if (lower.includes("waiting") || lower.includes("open")) return { answer: "I’m waiting for Mike to confirm ABC’s installation date. I also have the revised quote ready for Sarah, but sending it externally still requires approval.", source: "Open work · ABC commitment" };
   if (lower.includes("quote")) return { answer: "The latest quote for ABC Manufacturing is version 3 for $18,500. Sarah replied asking whether installation is included, so I would confirm that before sending the revision.", source: "ABC Quote v3.xlsx · Sarah email thread" };

@@ -168,6 +168,7 @@ create table public.interaction_attachments (
   content_hash text,
   metadata jsonb not null default '{}'
 );
+create unique index interaction_attachment_external_idx on public.interaction_attachments (interaction_id, external_id);
 
 create table public.memory_records (
   id uuid primary key default gen_random_uuid(),
@@ -282,6 +283,9 @@ create index events_org_time_idx on public.agent_events (organization_id, create
 create index tasks_org_status_idx on public.tasks (organization_id, status);
 create index commitments_org_status_idx on public.commitments (organization_id, status);
 create index deliveries_pending_idx on public.inbound_deliveries (status, received_at) where status in ('pending','failed');
+create unique index task_source_interaction_idx on public.tasks (source_interaction_id);
+create unique index commitment_source_interaction_idx on public.commitments (source_interaction_id);
+create unique index event_interaction_action_idx on public.agent_events (agent_id, interaction_id, action);
 
 create or replace function private.is_org_member(target_org uuid)
 returns boolean language sql stable security definer set search_path = '' as $$
@@ -315,6 +319,9 @@ create policy interaction_participant_read on public.interaction_participants fo
 );
 
 -- Writes go through authenticated server services for the feasibility demo. The browser has no direct write policies.
+revoke all on all tables in schema public from anon;
+grant select, insert, update, delete on all tables in schema public to service_role;
+grant usage, select on all sequences in schema public to service_role;
 revoke all on all tables in schema private from anon, authenticated;
 grant select on public.organizations, public.organization_members, public.parties, public.party_identities,
   public.agents, public.companies, public.relationships, public.connections, public.conversations,

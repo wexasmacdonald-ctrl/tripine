@@ -62,6 +62,6 @@ export interface OutboundInteraction extends Omit<InboundInteraction, "participa
 
 export interface ChannelAdapter<RawInbound = unknown> {
   channel: ChannelKind;
-  normalizeInbound(raw: RawInbound, context: { organizationId: string; agentId: string; agentAddress: string }): Promise<InboundInteraction>;
+  normalizeInbound(raw: RawInbound, context: { organizationId: string; agentId: string; agentAddress: string; verifiedInternalAddresses?: string[] }): Promise<InboundInteraction>;
   sendOutbound(interaction: OutboundInteraction, context: { connectionId: string }): Promise<{ externalMessageId?: string; status: "sent" | "needs_reconciliation" }>;
 }
