@@ -14,7 +14,7 @@ Create a SharePoint site with realistic synthetic ABC Manufacturing documents. A
 
 ## 2. Supabase
 
-Create a project and run `supabase/migrations/202608130001_initial_tripine.sql`, followed by `supabase/seed.sql`, in the SQL editor.
+Create a project and run every SQL file in `supabase/migrations` in filename order, followed by `supabase/seed.sql`, in the SQL editor.
 
 In Authentication, create Connor with email/password and copy his user UUID. In SQL, run:
 
@@ -61,7 +61,7 @@ Import `wexasmacdonald-ctrl/tripine`. Add all variables from `.env.example` for 
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
 - `SUPABASE_SECRET_KEY`
 - `OPENAI_API_KEY`
-- `OPENAI_MODEL=gpt-5.4-nano`
+- `OPENAI_MODEL=gpt-5.6-terra`
 - `MICROSOFT_TENANT_ID` (the tenant GUID)
 - `MICROSOFT_CLIENT_ID`
 - `MICROSOFT_CLIENT_SECRET`
@@ -107,9 +107,11 @@ Verify:
 5. Confirm Alex replies as Alex. This auto-reply is allowed only for a verified same-domain sender, direct `To`, and no attachment.
 6. Sign into Tripine as Connor and ask, “What happened with ABC?” The answer should use the persisted email interaction and activity.
 7. CC Alex without directly delegating. Confirm Alex records the message but does not reply.
+8. Open `/api/readiness` while signed in as Connor and confirm every Boolean check is true with zero failed deliveries.
+9. Use the External actions card to create an exact outbound email approval, approve it once, and confirm a single message appears in Alex's Sent Items.
 
 If background processing fails, invoke `POST /api/internal/graph/process` with `Authorization: Bearer INTERNAL_JOB_SECRET` and inspect `inbound_deliveries.last_error`.
 
 ## Current safety boundary
 
-External recipients, forwards, attachments, changed recipients, and commitment-bearing messages are not auto-sent. The schema and policy layer support approvals, but the approval UI/executor remains the next live-test milestone.
+External recipients, forwards, attachments, changed recipients, and commitment-bearing messages are not auto-sent. The workspace can create immutable text-email approvals and execute them once through Alex's mailbox. Attachment approvals, approval editing/versioning, reply-all approvals, and automated Sent Items reconciliation remain postponed.

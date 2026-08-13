@@ -19,5 +19,5 @@ export function enforceParticipationPolicy(interaction: InboundInteraction, prop
 }
 
 export function outboundRequiresApproval(interaction: { recipients: Array<{ verifiedInternal: boolean }>; action: string; attachments: unknown[]; createsCommitment?: boolean; changesRecipients?: boolean }) {
-  return interaction.action !== "reply" || interaction.recipients.some((r) => !r.verifiedInternal) || interaction.attachments.length > 0 || interaction.createsCommitment || interaction.changesRecipients;
+  return Boolean(interaction.action !== "reply" || interaction.recipients.some((r) => !r.verifiedInternal) || interaction.attachments.length > 0 || interaction.createsCommitment || interaction.changesRecipients);
 }

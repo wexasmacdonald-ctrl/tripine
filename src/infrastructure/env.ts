@@ -7,7 +7,7 @@ const serverSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
   SUPABASE_SECRET_KEY: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
-  OPENAI_MODEL: z.string().default("gpt-5.4-nano"),
+  OPENAI_MODEL: z.string().default("gpt-5.6-terra"),
   MICROSOFT_TENANT_ID: z.string().default("organizations"),
   MICROSOFT_CLIENT_ID: z.string().optional(),
   MICROSOFT_CLIENT_SECRET: z.string().optional(),

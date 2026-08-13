@@ -15,6 +15,7 @@ Open `http://localhost:3000`. No credentials are required for deterministic demo
 
 ```bash
 npm run lint
+npm run test
 npm run build
 ```
 
@@ -34,5 +35,9 @@ Import this repository into Vercel. See [docs/cloud-setup.md](docs/cloud-setup.m
 - Live inbound Outlook processing, participant/thread resolution, Graph mail/file research, and narrow internal auto-replies.
 - Supabase authentication and cross-channel retrieval of email history, tasks, commitments, and events.
 - Tenant-scoped Supabase schema for parties, conversations, interactions, memory, tasks, commitments, events, and approvals.
+- Persistent web interactions, live work/activity panels, immutable external-email approvals, and exactly-once submission guards.
+- Authenticated readiness diagnostics and scenario-focused Outlook/participation tests.
 
 Apply the migration and provide the cloud environment variables before connecting real accounts. Never place credentials in this repository.
+
+The account-owned setup checklist is in [docs/brad-action-list.md](docs/brad-action-list.md), and the call flow is in [docs/demo-runbook.md](docs/demo-runbook.md).
