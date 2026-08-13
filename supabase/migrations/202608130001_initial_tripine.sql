@@ -41,6 +41,7 @@ create table public.party_identities (
   provider_tenant_id text,
   provider_object_id text,
   verified boolean not null default false,
+  metadata jsonb not null default '{}',
   created_at timestamptz not null default now(),
   unique (organization_id, channel, address)
 );
@@ -146,6 +147,17 @@ create table public.interactions (
   occurred_at timestamptz not null,
   created_at timestamptz not null default now(),
   unique (channel_thread_id, external_message_id)
+);
+
+create table public.conversation_entity_context (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  conversation_id uuid not null references public.conversations(id) on delete cascade,
+  company_id uuid not null references public.companies(id) on delete cascade,
+  source_interaction_id uuid references public.interactions(id) on delete set null,
+  confidence numeric(4,3) not null default 1 check (confidence between 0 and 1),
+  last_mentioned_at timestamptz not null default now(),
+  unique (conversation_id, company_id)
 );
 
 create table public.interaction_participants (
@@ -300,7 +312,7 @@ grant usage on schema private to authenticated;
 grant execute on function private.is_org_member(uuid) to authenticated;
 
 do $$ declare t text; begin
-  foreach t in array array['organizations','parties','organization_members','party_identities','agents','companies','relationships','connections','conversations','channel_threads','interactions','interaction_participants','interaction_attachments','memory_records','tasks','commitments','agent_capability_policies','agent_events','approval_requests','graph_subscriptions','inbound_deliveries'] loop
+  foreach t in array array['organizations','parties','organization_members','party_identities','agents','companies','relationships','connections','conversations','channel_threads','conversation_entity_context','interactions','interaction_participants','interaction_attachments','memory_records','tasks','commitments','agent_capability_policies','agent_events','approval_requests','graph_subscriptions','inbound_deliveries'] loop
     execute format('alter table public.%I enable row level security', t);
   end loop;
 end $$;
@@ -309,7 +321,7 @@ create policy org_read on public.organizations for select to authenticated using
 create policy org_member_read on public.organization_members for select to authenticated using (private.is_org_member(organization_id));
 
 do $$ declare t text; begin
-  foreach t in array array['parties','party_identities','agents','companies','relationships','connections','conversations','channel_threads','interactions','interaction_attachments','memory_records','tasks','commitments','agent_capability_policies','agent_events','approval_requests'] loop
+  foreach t in array array['parties','party_identities','agents','companies','relationships','connections','conversations','channel_threads','conversation_entity_context','interactions','interaction_attachments','memory_records','tasks','commitments','agent_capability_policies','agent_events','approval_requests'] loop
     execute format('create policy tenant_read on public.%I for select to authenticated using (private.is_org_member(organization_id))', t);
   end loop;
 end $$;
@@ -325,6 +337,6 @@ grant usage, select on all sequences in schema public to service_role;
 revoke all on all tables in schema private from anon, authenticated;
 grant select on public.organizations, public.organization_members, public.parties, public.party_identities,
   public.agents, public.companies, public.relationships, public.connections, public.conversations,
-  public.channel_threads, public.interactions, public.interaction_participants, public.interaction_attachments,
+  public.channel_threads, public.conversation_entity_context, public.interactions, public.interaction_participants, public.interaction_attachments,
   public.memory_records, public.tasks, public.commitments, public.agent_capability_policies,
   public.agent_events, public.approval_requests to authenticated;

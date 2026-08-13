@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { enforceParticipationPolicy, outboundRequiresApproval, type ParticipationAssessment } from "../src/agent/participation/policy";
 import type { InboundInteraction } from "../src/domain/interactions";
+import { recipientsAreAllowed } from "../src/domain/approvals/recipient-policy";
 
 const proposed: ParticipationAssessment = { role: "direct_recipient", intent: "request", shouldRespond: true, mayCreateTask: true, mayCreateCommitment: true, confidence: 0.9 };
 function interaction(overrides: Partial<InboundInteraction> = {}): InboundInteraction {
@@ -26,5 +27,13 @@ describe("participation policy", () => {
 
   it("allows only a narrow internal reply without approval", () => {
     expect(outboundRequiresApproval({ recipients: [{ verifiedInternal: true }], action: "reply", attachments: [] })).toBe(false);
+  });
+});
+
+describe("controlled recipient policy", () => {
+  it("requires an explicit exact-address allowlist", () => {
+    expect(recipientsAreAllowed(["sarah@example.com"], undefined)).toBe(false);
+    expect(recipientsAreAllowed(["Sarah@Example.com"], "sarah@example.com,connor@example.com")).toBe(true);
+    expect(recipientsAreAllowed(["attacker@example.com"], "sarah@example.com")).toBe(false);
   });
 });

@@ -31,6 +31,8 @@ select organization_id, 'REPLACE_WITH_AUTH_USER_UUID'::uuid, id, 'owner' from co
 
 Copy the project URL, publishable key, and a new `sb_secret_...` key. The secret key stays server-side and bypasses RLS; never use a `NEXT_PUBLIC_` name for it.
 
+Use Connor's actual Microsoft mailbox address as his Supabase Auth email. When Connor signs into Tripine, the server binds that authenticated address to Connor's party as a verified internal communication identity. Sign Connor into Tripine before the first Outlook scenario.
+
 ## 3. OpenAI
 
 Create an API project with a small spend limit. Copy its API key. Tripine calls the Responses API with `store: false`; Supabase remains the application state store.
@@ -72,6 +74,7 @@ Import `wexasmacdonald-ctrl/tripine`. Add all variables from `.env.example` for 
 - `CREDENTIAL_ENCRYPTION_KEY` (exactly 32 random bytes encoded as base64)
 - `DEMO_ORGANIZATION_SLUG=demo-company`
 - `DEMO_AGENT_EMAIL=alex@YOUR_DOMAIN`
+- `DEMO_ALLOWED_RECIPIENTS` (comma-separated exact addresses controlled by you, including Connor and the Sarah test address)
 
 Generate safe values in PowerShell:
 
@@ -103,14 +106,18 @@ Verify:
 1. Email Alex from Connor with Alex in `To`: ask about ABC and Sarah's reply.
 2. Confirm `inbound_deliveries` becomes `processed`.
 3. Confirm one inbound interaction and `email.received` event appear.
-4. Confirm Graph search finds controlled Outlook and SharePoint evidence.
+4. Confirm Graph search finds controlled Outlook and SharePoint evidence and opens the actual PDF, DOCX, XLSX, or text document within the configured limits.
 5. Confirm Alex replies as Alex. This auto-reply is allowed only for a verified same-domain sender, direct `To`, and no attachment.
 6. Sign into Tripine as Connor and ask, “What happened with ABC?” The answer should use the persisted email interaction and activity.
 7. CC Alex without directly delegating. Confirm Alex records the message but does not reply.
 8. Open `/api/readiness` while signed in as Connor and confirm every Boolean check is true with zero failed deliveries.
 9. Use the External actions card to create an exact outbound email approval, approve it once, and confirm a single message appears in Alex's Sent Items.
 
+Approval does not override the recipient allowlist. Both approval creation and execution reject any address absent from `DEMO_ALLOWED_RECIPIENTS`.
+
 If background processing fails, invoke `POST /api/internal/graph/process` with `Authorization: Bearer INTERNAL_JOB_SECRET` and inspect `inbound_deliveries.last_error`.
+
+The daily renewal job renews subscriptions approaching expiry and recreates subscriptions marked `error` by Microsoft lifecycle notifications. After a lifecycle event, run the renewal endpoint manually with the cron/internal bearer secret if you cannot wait for the scheduled job.
 
 ## Current safety boundary
 

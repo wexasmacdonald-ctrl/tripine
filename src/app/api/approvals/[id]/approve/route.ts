@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import { createServerSupabase } from "@/infrastructure/supabase/server";
 import { createAdminClient } from "@/infrastructure/supabase/admin";
 import { getValidMicrosoftToken } from "@/connectors/microsoft/auth/connection-store";
+import { env } from "@/infrastructure/env";
+import { recipientsAreAllowed } from "@/domain/approvals/recipient-policy";
 
 type EmailPayload = { type: "email.send"; to: string[]; cc: string[]; subject: string; body: string };
 function canonical(value: unknown) { return JSON.stringify(value, Object.keys(value as object).sort()); }
@@ -23,6 +25,7 @@ export async function POST(_request: Request, context: RouteContext<"/api/approv
   }
   const payload = approval.payload as EmailPayload;
   if (createHash("sha256").update(canonical(payload)).digest("hex") !== approval.payload_hash) return Response.json({ error: "Approval payload integrity check failed." }, { status: 409 });
+  if (!recipientsAreAllowed([...payload.to, ...payload.cc], env.DEMO_ALLOWED_RECIPIENTS)) return Response.json({ error: "A recipient is no longer in the controlled demo allowlist." }, { status: 403 });
   const { data: claimed } = await admin.from("approval_requests").update({ status: "executing", decided_by_user_id: user.id, decided_at: new Date().toISOString() }).eq("id", id).eq("status", "pending").select("id").maybeSingle();
   if (!claimed) return Response.json({ error: "Approval is already being executed." }, { status: 409 });
   const { data: connection } = await admin.from("connections").select("id").eq("organization_id", membership.organization_id).eq("provider", "microsoft").eq("owner_type", "service").eq("status", "connected").single();

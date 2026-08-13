@@ -18,11 +18,19 @@ export async function createMailboxSubscription(input: { connectionId: string; a
 export async function renewDueSubscriptions() {
   const supabase = createAdminClient();
   const threshold = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString();
-  const { data } = await supabase.from("graph_subscriptions").select("id,external_id,connection_id").lt("expires_at", threshold).eq("status", "active");
+  const { data } = await supabase.from("graph_subscriptions").select("id,external_id,connection_id,status,expires_at,connections!inner(provider_account_id)").or(`status.eq.error,and(status.eq.active,expires_at.lt.${threshold})`);
   let renewed = 0;
   for (const item of data ?? []) {
     try {
       const accessToken = await getValidMicrosoftToken(item.connection_id);
+      if (item.status === "error") {
+        const relation = item.connections as unknown as { provider_account_id?: string };
+        if (!relation.provider_account_id) throw new Error("Microsoft account object ID is unavailable");
+        await createMailboxSubscription({ connectionId: item.connection_id, accountObjectId: relation.provider_account_id, accessToken });
+        await supabase.from("graph_subscriptions").update({ status: "replaced" }).eq("id", item.id);
+        renewed++;
+        continue;
+      }
       const expirationDateTime = new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString();
       const subscription = await graphFetch<{ expirationDateTime: string }>(accessToken, `/subscriptions/${item.external_id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ expirationDateTime }) });
       await supabase.from("graph_subscriptions").update({ expires_at: subscription.expirationDateTime }).eq("id", item.id); renewed++;
