@@ -12,14 +12,14 @@ Everything below requires account ownership, billing consent, a secret, or an id
 2. Create a Supabase project.
    - Run every SQL file in `supabase/migrations` in filename order in the SQL editor.
    - Run `supabase/seed.sql`.
-   - Create Connor in Supabase Authentication and run the membership SQL from `docs/cloud-setup.md` with Connor's auth UUID.
+   - Create Connor in Supabase Authentication using the same email address as Connor's Microsoft mailbox, then run the membership SQL from `docs/cloud-setup.md` with Connor's auth UUID.
 3. Create an OpenAI API project/key and set a small project spend limit.
 4. Create a single-tenant Entra Web app registration in the new Microsoft tenant.
    - Add delegated `User.Read`, `Mail.Read`, `Mail.Send`, and `Files.Read.All` permissions.
    - Grant admin consent.
    - Add the deployed callback URL shown in `docs/cloud-setup.md`.
 5. Import `wexasmacdonald-ctrl/tripine` into Vercel and add every variable from `.env.example`.
-6. Sign into Tripine as Connor, click **Connect Microsoft 365**, and complete OAuth specifically as Alex.
+6. Sign into Tripine as Connor once so his authenticated email becomes a verified internal identity. Then click **Connect Microsoft 365** and complete OAuth specifically as Alex.
 
 ## Demo data
 

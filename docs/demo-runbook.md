@@ -18,5 +18,6 @@ Tripine is not an integration dashboard. Alex is a persistent employee identity 
 
 - `/api/readiness`: authenticated owner-only configuration and subscription checks.
 - `POST /api/internal/graph/process`: retry durable pending/failed deliveries with the internal bearer secret.
+- `GET /api/internal/graph/renew`: renew due subscriptions and recreate subscriptions marked broken by Microsoft lifecycle events.
 - A send marked `needs_reconciliation` must be checked in Alex's Sent Items before any retry.
 - CC-only, forwarded, attachment-bearing, external, and recipient-changing email is never auto-sent.

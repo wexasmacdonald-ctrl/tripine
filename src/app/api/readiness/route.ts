@@ -7,17 +7,18 @@ export async function GET() {
   const supabase = await createServerSupabase();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: "Sign in is required." }, { status: 401 });
-  const { data: membership } = await supabase.from("organization_members").select("organization_id,role").eq("user_id", user.id).single();
+  const { data: membership } = await supabase.from("organization_members").select("organization_id,party_id,role").eq("user_id", user.id).single();
   if (!membership || !["owner", "admin"].includes(membership.role)) return Response.json({ error: "Owner or admin access is required." }, { status: 403 });
   const admin = createAdminClient();
-  const [{ data: agents }, { data: connections }, { data: subscriptions }, { count: failedDeliveries }] = await Promise.all([
+  const [{ data: agents }, { data: identities }, { data: connections }, { data: subscriptions }, { count: failedDeliveries }] = await Promise.all([
     admin.from("agents").select("id").eq("organization_id", membership.organization_id).eq("active", true),
+    admin.from("party_identities").select("id").eq("organization_id", membership.organization_id).eq("party_id", membership.party_id).eq("channel", "email").eq("verified", true),
     admin.from("connections").select("id,status,account_address").eq("organization_id", membership.organization_id).eq("provider", "microsoft"),
     admin.from("graph_subscriptions").select("id,status,expires_at,connections!inner(organization_id)").eq("connections.organization_id", membership.organization_id),
     admin.from("inbound_deliveries").select("id", { count: "exact", head: true }).eq("status", "failed"),
   ]);
   const connected = connections?.some((item) => item.status === "connected") ?? false;
   const subscribed = subscriptions?.some((item) => item.status === "active" && new Date(item.expires_at).getTime() > Date.now()) ?? false;
-  const checks = { database: true, agentSeeded: Boolean(agents?.length), openai: Boolean(env.OPENAI_API_KEY), microsoftEnvironment: Boolean(env.MICROSOFT_CLIENT_ID && env.MICROSOFT_CLIENT_SECRET && env.MICROSOFT_GRAPH_CLIENT_STATE), encryption: Boolean(env.CREDENTIAL_ENCRYPTION_KEY), alexConnected: connected, webhookSubscribed: subscribed, failedDeliveries: failedDeliveries ?? 0 };
+  const checks = { database: true, agentSeeded: Boolean(agents?.length), signedInUserEmailVerified: Boolean(identities?.length), openai: Boolean(env.OPENAI_API_KEY), microsoftEnvironment: Boolean(env.MICROSOFT_CLIENT_ID && env.MICROSOFT_CLIENT_SECRET && env.MICROSOFT_GRAPH_CLIENT_STATE), encryption: Boolean(env.CREDENTIAL_ENCRYPTION_KEY), outboundRecipientAllowlist: Boolean(env.DEMO_ALLOWED_RECIPIENTS?.trim()), alexConnected: connected, webhookSubscribed: subscribed, failedDeliveries: failedDeliveries ?? 0 };
   return Response.json({ ready: Object.entries(checks).every(([key, value]) => key === "failedDeliveries" ? value === 0 : Boolean(value)), mode: "connected", checks });
 }

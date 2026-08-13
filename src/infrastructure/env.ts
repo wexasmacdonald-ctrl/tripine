@@ -18,6 +18,7 @@ const serverSchema = z.object({
   CREDENTIAL_ENCRYPTION_KEY: z.string().optional(),
   DEMO_ORGANIZATION_SLUG: z.string().default("demo-company"),
   DEMO_AGENT_EMAIL: z.string().email().optional(),
+  DEMO_ALLOWED_RECIPIENTS: z.string().optional(),
 });
 export const env = serverSchema.parse(process.env);
 export const isCloudConfigured = Boolean(env.NEXT_PUBLIC_SUPABASE_URL && (env.SUPABASE_SECRET_KEY || env.SUPABASE_SERVICE_ROLE_KEY) && env.MICROSOFT_CLIENT_ID);

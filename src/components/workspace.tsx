@@ -72,7 +72,9 @@ export function Workspace({ configured }: { configured: boolean }) {
   async function requestApproval(event: FormEvent) {
     event.preventDefault();
     const response = await fetch("/api/approvals", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ to: [draft.to], cc: [], subject: draft.subject, body: draft.body }) });
+    const data = await response.json() as { error?: string };
     if (response.ok) { setDraft({ to: "", subject: "", body: "" }); setDraftOpen(false); await refreshWorkspace(); }
+    else setMessages((current) => [...current, { id: crypto.randomUUID(), role: "agent", text: data.error ?? "The approval request could not be created." }]);
   }
 
   async function approve(id: string) {

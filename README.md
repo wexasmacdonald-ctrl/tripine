@@ -37,6 +37,7 @@ Import this repository into Vercel. See [docs/cloud-setup.md](docs/cloud-setup.m
 - Tenant-scoped Supabase schema for parties, conversations, interactions, memory, tasks, commitments, events, and approvals.
 - Persistent web interactions, live work/activity panels, immutable external-email approvals, and exactly-once submission guards.
 - Authenticated readiness diagnostics and scenario-focused Outlook/participation tests.
+- Bounded extraction of actual PDF, DOCX, XLSX, and text evidence from SharePoint/OneDrive results.
 
 Apply the migration and provide the cloud environment variables before connecting real accounts. Never place credentials in this repository.
 

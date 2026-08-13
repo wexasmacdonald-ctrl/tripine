@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import { createServerSupabase } from "@/infrastructure/supabase/server";
 import { createAdminClient } from "@/infrastructure/supabase/admin";
+import { env } from "@/infrastructure/env";
+import { recipientsAreAllowed } from "@/domain/approvals/recipient-policy";
 
 const payloadSchema = z.object({
   to: z.array(z.email()).min(1).max(10),
@@ -15,6 +17,7 @@ function canonical(value: unknown) { return JSON.stringify(value, Object.keys(va
 export async function POST(request: Request) {
   const parsed = payloadSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "A valid email draft is required." }, { status: 400 });
+  if (!recipientsAreAllowed([...parsed.data.to, ...parsed.data.cc], env.DEMO_ALLOWED_RECIPIENTS)) return Response.json({ error: "Every recipient must be present in the controlled demo recipient allowlist." }, { status: 403 });
   const supabase = await createServerSupabase();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: "Sign in is required." }, { status: 401 });
