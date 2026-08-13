@@ -1,9 +1,9 @@
-import { isCloudConfigured } from "@/infrastructure/env";
+import { isPersistenceConfigured } from "@/infrastructure/env";
 import { createServerSupabase } from "@/infrastructure/supabase/server";
 import { reconcileAuthenticatedEmailIdentity } from "@/domain/parties/authenticated-identity";
 
 export async function GET() {
-  if (!isCloudConfigured) return Response.json({ mode: "demo" });
+  if (!isPersistenceConfigured) return Response.json({ mode: "demo" });
   const supabase = await createServerSupabase();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: "Sign in is required." }, { status: 401 });

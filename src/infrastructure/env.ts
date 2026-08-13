@@ -21,4 +21,14 @@ const serverSchema = z.object({
   DEMO_ALLOWED_RECIPIENTS: z.string().optional(),
 });
 export const env = serverSchema.parse(process.env);
-export const isCloudConfigured = Boolean(env.NEXT_PUBLIC_SUPABASE_URL && (env.SUPABASE_SECRET_KEY || env.SUPABASE_SERVICE_ROLE_KEY) && env.MICROSOFT_CLIENT_ID);
+export const isPersistenceConfigured = Boolean(
+  env.NEXT_PUBLIC_SUPABASE_URL &&
+  env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY &&
+  (env.SUPABASE_SECRET_KEY || env.SUPABASE_SERVICE_ROLE_KEY),
+);
+
+export const isMicrosoftConfigured = Boolean(
+  isPersistenceConfigured &&
+  env.MICROSOFT_CLIENT_ID &&
+  env.MICROSOFT_CLIENT_SECRET,
+);

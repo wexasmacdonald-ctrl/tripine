@@ -1,11 +1,11 @@
 import { cookies } from "next/headers";
 import { createOAuthRequest } from "@/connectors/microsoft/auth/oauth";
-import { isCloudConfigured } from "@/infrastructure/env";
+import { isPersistenceConfigured } from "@/infrastructure/env";
 import { createServerSupabase } from "@/infrastructure/supabase/server";
 
 export async function GET() {
   try {
-    if (isCloudConfigured) {
+    if (isPersistenceConfigured) {
       const supabase = await createServerSupabase();
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return Response.json({ error: "Sign in to Tripine before connecting Microsoft 365." }, { status: 401 });
