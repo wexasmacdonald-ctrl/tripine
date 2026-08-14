@@ -16,7 +16,7 @@ Current pickup list for the controlled Tripine feasibility demo. Do not paste pa
 1. In the open Connor creation result, securely save Connor's one-time password. Do not send it in chat.
 2. Open the `Tripine AI Employee Demo` app registration in Entra and report only its **Application (client) ID**.
 3. Under **Authentication**, add this Web redirect URI:
-   - `https://tripine.vercel.app/oauth/microsoft/callback`
+   - `https://tripine.vercel.app/m365/return`
 4. Under **API permissions**, add delegated Microsoft Graph permissions:
    - `User.Read`
    - `Mail.Read`

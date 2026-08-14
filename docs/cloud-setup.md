@@ -43,7 +43,7 @@ Create a Web app registration in the demo tenant. Use single-tenant access if th
 
 Add the production redirect URI:
 
-`https://YOUR_VERCEL_DOMAIN/oauth/microsoft/callback`
+`https://YOUR_VERCEL_DOMAIN/m365/return`
 
 Add delegated Microsoft Graph permissions:
 
@@ -67,7 +67,7 @@ Import `wexasmacdonald-ctrl/tripine`. Add all variables from `.env.example` for 
 - `MICROSOFT_TENANT_ID` (the tenant GUID)
 - `MICROSOFT_CLIENT_ID`
 - `MICROSOFT_CLIENT_SECRET`
-- `MICROSOFT_REDIRECT_URI=https://YOUR_VERCEL_DOMAIN/oauth/microsoft/callback`
+- `MICROSOFT_REDIRECT_URI=https://YOUR_VERCEL_DOMAIN/m365/return`
 - `MICROSOFT_GRAPH_CLIENT_STATE` (at least 32 random characters)
 - `INTERNAL_JOB_SECRET` (at least 32 random characters)
 - `CRON_SECRET` (at least 32 random characters; Vercel attaches this to cron calls)
