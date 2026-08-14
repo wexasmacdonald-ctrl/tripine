@@ -24,11 +24,16 @@ function contextAnswer(message: string, organizationalContext: unknown, labels: 
   const context = organizationalContext as { interactions?: Array<{ subject?: string | null; content_text?: string | null }>; tasks?: Array<{ description?: string; status?: string }>; commitments?: Array<{ description?: string; status?: string }>; events?: Array<{ action?: string; reason?: string }> } | undefined;
   const lower = message.toLowerCase();
   const open = [...(context?.tasks ?? []), ...(context?.commitments ?? [])].filter((item) => item.status !== "completed");
-  const recent = (context?.interactions ?? []).filter((item) => item.content_text).slice(0, 3);
+  const recent = (context?.interactions ?? []).filter((item) => item.content_text && item.content_text.trim() !== message.trim()).slice(0, 2);
   const activity = (context?.events ?? []).slice(0, 4);
   let answer: string;
   if (lower.includes("waiting") || lower.includes("open")) answer = open.length ? `I still have ${open.length} open item${open.length === 1 ? "" : "s"}: ${open.map((item) => item.description).filter(Boolean).join("; ")}.` : "I don’t have any open tasks or commitments recorded.";
-  else if (recent.length) answer = `Here’s what I have in the shared company context: ${recent.map((item) => `${item.subject ? `${item.subject}: ` : ""}${item.content_text}`).join(" | ")}${activity.length ? ` Recent activity: ${activity.map((item) => item.reason ?? item.action).filter(Boolean).join("; ")}.` : ""}`;
+  else if (recent.length) {
+    const summaries = recent.map((item) => `${item.subject ? `${item.subject}: ` : ""}${item.content_text?.slice(0, 320)}`).join(" | ");
+    const openSummary = open.length ? ` I have ${open.length} related open item${open.length === 1 ? "" : "s"}.` : "";
+    const activitySummary = activity.length ? ` Recent activity confirms: ${activity.slice(0, 3).map((item) => item.reason ?? item.action).filter(Boolean).join("; ")}.` : "";
+    answer = `Here’s what I have in the shared company context: ${summaries}.${openSummary}${activitySummary}`;
+  }
   else answer = "I don’t have enough stored company context to answer that confidently yet.";
   return { answer, source: labels.length ? labels.join(" · ") : "Tripine organizational context" };
 }

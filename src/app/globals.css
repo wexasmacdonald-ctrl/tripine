@@ -94,4 +94,5 @@ h1 { margin: 7px 0 5px; font-size: clamp(28px, 4vw, 43px); line-height: 1.04; le
 .delivery span { color: var(--muted); text-align: right; }
 .delivery small { grid-column: 1 / -1; color: #a72c2c; line-height: 1.4; }
 .delivery.failed strong { color: #a72c2c; }
+.retryButton { width: 100%; margin-top: 8px; border: 1px solid var(--line); border-radius: 9px; padding: 8px; background: #fafbf8; color: var(--pine); font-size: 11px; font-weight: 800; }
 @media (max-width: 900px) { .shell { grid-template-columns: 1fr; } .sidebar { display: none; } .main { padding: 24px 16px; } .grid { grid-template-columns: 1fr; } .topbar { gap: 15px; } .connection { display: none; } }

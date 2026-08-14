@@ -113,3 +113,16 @@ export async function processPendingDeliveries(limit = 5) {
   await Promise.all((data ?? []).map((row) => processInboundDelivery(row.id)));
   return data?.length ?? 0;
 }
+
+export async function processPendingDeliveriesForOrganization(organizationId: string, limit = 5) {
+  const supabase = createAdminClient();
+  const { data: connections } = await supabase.from("connections").select("id").eq("organization_id", organizationId);
+  const connectionIds = (connections ?? []).map((connection) => connection.id);
+  if (!connectionIds.length) return 0;
+  const { data: subscriptions } = await supabase.from("graph_subscriptions").select("external_id").in("connection_id", connectionIds);
+  const subscriptionIds = (subscriptions ?? []).map((subscription) => subscription.external_id);
+  if (!subscriptionIds.length) return 0;
+  const { data: deliveries } = await supabase.from("inbound_deliveries").select("id").in("status", ["pending", "failed"]).in("subscription_external_id", subscriptionIds).or(`lease_until.is.null,lease_until.lt.${new Date().toISOString()}`).order("received_at").limit(limit);
+  await Promise.all((deliveries ?? []).map((delivery) => processInboundDelivery(delivery.id)));
+  return deliveries?.length ?? 0;
+}

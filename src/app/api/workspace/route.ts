@@ -31,12 +31,20 @@ export async function GET() {
   const { data: deliveries } = subscriptionIds.length
     ? await admin.from("inbound_deliveries").select("id,status,attempt_count,last_error,received_at,processed_at").in("subscription_external_id", subscriptionIds).order("received_at", { ascending: false }).limit(8)
     : { data: [] };
+  const safeDeliveries = (deliveries ?? []).map((delivery) => ({
+    ...delivery,
+    last_error: delivery.last_error
+      ? /api key|openai|401/i.test(delivery.last_error)
+        ? "Model authentication failed during this delivery. Replace OPENAI_API_KEY; newer deliveries use a safe evidence-only fallback."
+        : delivery.last_error.slice(0, 220)
+      : null,
+  }));
 
   return Response.json({
     mode: "connected",
     connections: connections.data,
     subscriptions,
-    deliveries,
+    deliveries: safeDeliveries,
     tasks: tasks.data,
     commitments: commitments.data,
     events: events.data,

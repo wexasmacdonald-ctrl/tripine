@@ -91,6 +91,11 @@ export function Workspace({ configured }: { configured: boolean }) {
     await refreshWorkspace();
   }
 
+  async function retryFailedDeliveries() {
+    await fetch("/api/deliveries/retry", { method: "POST" });
+    await refreshWorkspace();
+  }
+
   const connected = configured && workspace.connections?.some((item) => item.status === "connected");
   const openWork = [...(workspace.tasks ?? []).map((item) => ({ ...item, kind: "Task" })), ...(workspace.commitments ?? []).map((item) => ({ ...item, kind: item.external_party_aware ? "External commitment" : "Commitment" }))];
 
@@ -139,6 +144,7 @@ export function Workspace({ configured }: { configured: boolean }) {
               <div className="healthLine"><span className={`dot ${workspace.subscriptions?.some((item) => item.status === "active") ? "live" : ""}`} /><span>{workspace.subscriptions?.some((item) => item.status === "active") ? "Outlook listener active" : "Outlook listener needs attention"}</span></div>
               {(workspace.deliveries ?? []).slice(0, 3).map((item) => <div className={`delivery ${item.status}`} key={item.id}><strong>{item.status}</strong><span>{new Date(item.received_at).toLocaleString()}</span>{item.last_error && <small>{item.last_error}</small>}</div>)}
               {(workspace.deliveries ?? []).length === 0 && <p className="empty">No mailbox deliveries yet.</p>}
+              {workspace.deliveries?.some((item) => item.status === "failed") && <button className="retryButton" onClick={retryFailedDeliveries}>Retry failed delivery</button>}
             </section>}
             {configured && <section className="card section"><div className="sectionTitle"><h2>External actions</h2><button className="textButton" onClick={() => setDraftOpen((value) => !value)}>Draft email</button></div>
               {draftOpen && <form className="draftForm" onSubmit={requestApproval}><input type="email" required placeholder="Recipient email" value={draft.to} onChange={(event) => setDraft({ ...draft, to: event.target.value })} /><input required placeholder="Subject" value={draft.subject} onChange={(event) => setDraft({ ...draft, subject: event.target.value })} /><textarea required placeholder="Message from Alex" value={draft.body} onChange={(event) => setDraft({ ...draft, body: event.target.value })} /><button className="primary">Request approval</button></form>}
