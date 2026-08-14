@@ -1,8 +1,5 @@
 import { cookies } from "next/headers";
-import { exchangeCode } from "@/connectors/microsoft/auth/oauth";
-import { graphFetch } from "@/connectors/microsoft/graph/client";
-import { saveMicrosoftConnection } from "@/connectors/microsoft/auth/connection-store";
-import { createMailboxSubscription } from "@/connectors/microsoft/subscriptions/manager";
+import { completeMicrosoftCallback } from "@/connectors/microsoft/auth/complete-callback";
 
 export async function GET(request: Request) {
   const url = new URL(request.url); const jar = await cookies();
@@ -11,10 +8,7 @@ export async function GET(request: Request) {
   jar.delete("tripine_ms_state"); jar.delete("tripine_ms_verifier");
   if (!code || !state || !expected || state !== expected || !verifier) return Response.json({ error: "Invalid or expired OAuth callback." }, { status: 400 });
   try {
-    const token = await exchangeCode(code, verifier);
-    const profile = await graphFetch<{ id: string; displayName: string; mail?: string; userPrincipalName: string }>(token.access_token, "/me?$select=id,displayName,mail,userPrincipalName");
-    const connection = await saveMicrosoftConnection(profile, token);
-    await createMailboxSubscription({ connectionId: connection.id, accountObjectId: profile.id, accessToken: token.access_token });
+    const profile = await completeMicrosoftCallback(code, verifier);
     const destination = new URL("/", request.url); destination.searchParams.set("connected", profile.mail ?? profile.userPrincipalName);
     return Response.redirect(destination);
   } catch (error) { console.error("microsoft_callback_failed", { error: error instanceof Error ? error.message : "unknown" }); return Response.json({ error: "Microsoft connection failed." }, { status: 502 }); }
