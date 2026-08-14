@@ -5,6 +5,8 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 type Message = { id: string; role: "user" | "agent"; text: string; source?: string };
 type WorkspaceData = {
   connections?: Array<{ id: string; status: string; account_address?: string }>;
+  subscriptions?: Array<{ id: string; status: string; expires_at: string; last_notification_at?: string }>;
+  deliveries?: Array<{ id: string; status: string; attempt_count: number; last_error?: string; received_at: string; processed_at?: string }>;
   tasks?: Array<{ id: string; description: string; status: string }>;
   commitments?: Array<{ id: string; description: string; status: string; external_party_aware: boolean }>;
   events?: Array<{ id: string; action: string; status: string; reason?: string; created_at: string }>;
@@ -127,6 +129,11 @@ export function Workspace({ configured }: { configured: boolean }) {
             <section className="card section"><h2>Recent activity</h2>
               {(configured ? workspace.events ?? [] : [{ id: "demo-email", action: "Read Sarah's reply", status: "success", reason: "Outlook · yesterday", created_at: "" }, { id: "demo-file", action: "Found latest ABC quote", status: "success", reason: "SharePoint · Quote v3", created_at: "" }]).slice(0, 5).map((item) => <div className="item" key={item.id}><div className="icon">{item.action.includes("email") ? "✉" : "⌕"}</div><div><p>{item.action.replaceAll(".", " ")}</p><small>{item.reason ?? item.status}</small></div></div>)}
             </section>
+            {configured && connected && <section className="card section"><h2>Workplace health</h2>
+              <div className="healthLine"><span className={`dot ${workspace.subscriptions?.some((item) => item.status === "active") ? "live" : ""}`} /><span>{workspace.subscriptions?.some((item) => item.status === "active") ? "Outlook listener active" : "Outlook listener needs attention"}</span></div>
+              {(workspace.deliveries ?? []).slice(0, 3).map((item) => <div className={`delivery ${item.status}`} key={item.id}><strong>{item.status}</strong><span>{new Date(item.received_at).toLocaleString()}</span>{item.last_error && <small>{item.last_error}</small>}</div>)}
+              {(workspace.deliveries ?? []).length === 0 && <p className="empty">No mailbox deliveries yet.</p>}
+            </section>}
             {configured && <section className="card section"><div className="sectionTitle"><h2>External actions</h2><button className="textButton" onClick={() => setDraftOpen((value) => !value)}>Draft email</button></div>
               {draftOpen && <form className="draftForm" onSubmit={requestApproval}><input type="email" required placeholder="Recipient email" value={draft.to} onChange={(event) => setDraft({ ...draft, to: event.target.value })} /><input required placeholder="Subject" value={draft.subject} onChange={(event) => setDraft({ ...draft, subject: event.target.value })} /><textarea required placeholder="Message from Alex" value={draft.body} onChange={(event) => setDraft({ ...draft, body: event.target.value })} /><button className="primary">Request approval</button></form>}
               {(workspace.approvals ?? []).map((item) => <div className="approval" key={item.id}><strong>{item.payload.subject}</strong><small>To {item.payload.to?.join(", ")}</small><p>{item.payload.body}</p><button className="approveButton" onClick={() => approve(item.id)}>Approve exact email</button></div>)}

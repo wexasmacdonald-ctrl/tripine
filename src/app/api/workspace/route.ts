@@ -1,5 +1,6 @@
 import { isPersistenceConfigured } from "@/infrastructure/env";
 import { createServerSupabase } from "@/infrastructure/supabase/server";
+import { createAdminClient } from "@/infrastructure/supabase/admin";
 import { reconcileAuthenticatedEmailIdentity } from "@/domain/parties/authenticated-identity";
 
 export async function GET() {
@@ -19,5 +20,25 @@ export async function GET() {
   ]);
   const error = [connections, tasks, commitments, events, approvals].find((result) => result.error)?.error;
   if (error) return Response.json({ error: "Workspace data could not be loaded." }, { status: 500 });
-  return Response.json({ mode: "connected", connections: connections.data, tasks: tasks.data, commitments: commitments.data, events: events.data, approvals: approvals.data });
+
+  const admin = createAdminClient();
+  const connectionIds = (connections.data ?? []).map((connection) => connection.id);
+  const { data: subscriptions } = connectionIds.length
+    ? await admin.from("graph_subscriptions").select("id,external_id,status,expires_at,last_notification_at").in("connection_id", connectionIds).order("created_at", { ascending: false })
+    : { data: [] };
+  const subscriptionIds = (subscriptions ?? []).map((subscription) => subscription.external_id);
+  const { data: deliveries } = subscriptionIds.length
+    ? await admin.from("inbound_deliveries").select("id,status,attempt_count,last_error,received_at,processed_at").in("subscription_external_id", subscriptionIds).order("received_at", { ascending: false }).limit(8)
+    : { data: [] };
+
+  return Response.json({
+    mode: "connected",
+    connections: connections.data,
+    subscriptions,
+    deliveries,
+    tasks: tasks.data,
+    commitments: commitments.data,
+    events: events.data,
+    approvals: approvals.data,
+  });
 }

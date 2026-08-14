@@ -87,4 +87,10 @@ h1 { margin: 7px 0 5px; font-size: clamp(28px, 4vw, 43px); line-height: 1.04; le
 .approval small { color: var(--muted); }
 .approval p { font-size: 12px; line-height: 1.45; max-height: 90px; overflow: auto; white-space: pre-wrap; }
 .approveButton { border: 0; border-radius: 9px; padding: 9px; background: var(--pine); color: white; font-size: 12px; font-weight: 800; }
+.healthLine { display: flex; align-items: center; gap: 9px; font-size: 12px; margin-bottom: 12px; }
+.delivery { border-top: 1px solid var(--line); padding: 9px 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 8px; font-size: 11px; }
+.delivery strong { text-transform: uppercase; letter-spacing: .05em; color: var(--pine); }
+.delivery span { color: var(--muted); text-align: right; }
+.delivery small { grid-column: 1 / -1; color: #a72c2c; line-height: 1.4; }
+.delivery.failed strong { color: #a72c2c; }
 @media (max-width: 900px) { .shell { grid-template-columns: 1fr; } .sidebar { display: none; } .main { padding: 24px 16px; } .grid { grid-template-columns: 1fr; } .topbar { gap: 15px; } .connection { display: none; } }
