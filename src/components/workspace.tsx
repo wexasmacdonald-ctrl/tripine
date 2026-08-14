@@ -28,20 +28,25 @@ export function Workspace({ configured }: { configured: boolean }) {
   const [busy, setBusy] = useState(false);
   const [conversationId, setConversationId] = useState<string>();
   const [workspace, setWorkspace] = useState<WorkspaceData>({});
+  const [workspaceError, setWorkspaceError] = useState<string>();
   const [draftOpen, setDraftOpen] = useState(false);
   const [draft, setDraft] = useState({ to: "", subject: "", body: "" });
 
   const refreshWorkspace = useCallback(async () => {
     if (!configured) return;
     const response = await fetch("/api/workspace", { cache: "no-store" });
-    if (response.ok) setWorkspace(await response.json() as WorkspaceData);
+    const data = await response.json() as WorkspaceData & { error?: string };
+    if (response.ok) { setWorkspace(data); setWorkspaceError(undefined); }
+    else setWorkspaceError(data.error ?? "Workspace data could not be loaded.");
   }, [configured]);
 
   useEffect(() => {
     if (!configured) return;
     let active = true;
     void fetch("/api/workspace", { cache: "no-store" }).then(async (response) => {
-      if (active && response.ok) setWorkspace(await response.json() as WorkspaceData);
+      const data = await response.json() as WorkspaceData & { error?: string };
+      if (active && response.ok) { setWorkspace(data); setWorkspaceError(undefined); }
+      else if (active) setWorkspaceError(data.error ?? "Workspace data could not be loaded.");
     });
     return () => { active = false; };
   }, [configured]);
@@ -110,6 +115,7 @@ export function Workspace({ configured }: { configured: boolean }) {
           <div className="connection"><span className={`dot ${connected ? "live" : ""}`} />{connected ? `Microsoft 365 · ${workspace.connections?.[0]?.account_address ?? "Alex"}` : configured ? "Microsoft 365 setup needed" : "Demo mode"}</div>
         </header>
         <div className="grid">
+          {workspaceError && <div className="workspaceAlert" role="alert">{workspaceError}</div>}
           <section className="card chat">
             <div className="cardHeader"><strong>ABC Manufacturing</strong><span className="channel">Web chat</span></div>
             <div className="messages">

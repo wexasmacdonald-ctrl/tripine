@@ -37,6 +37,7 @@ h1 { margin: 7px 0 5px; font-size: clamp(28px, 4vw, 43px); line-height: 1.04; le
 .dot { width: 8px; height: 8px; border-radius: 50%; background: #95a39d; }
 .dot.live { background: #42a976; box-shadow: 0 0 0 4px #42a97620; }
 .grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(290px, .8fr); gap: 20px; }
+.workspaceAlert { grid-column: 1 / -1; border: 1px solid #e5b6b6; background: #fff2f2; color: #8b2929; border-radius: 12px; padding: 11px 14px; font-size: 13px; }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 20px; box-shadow: 0 12px 30px #1e493109; }
 .chat { min-height: 650px; display: flex; flex-direction: column; overflow: hidden; }
 .cardHeader { padding: 18px 21px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; }
