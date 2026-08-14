@@ -1,0 +1,19 @@
+ABC Manufacturing — Quote v3
+
+Customer: ABC Manufacturing
+Primary contact: Sarah Chen
+Prepared by: Connor Demo
+Quote number: ABC-2026-0185
+Version: 3
+Quote total: $18,500 CAD
+Issued: August 10, 2026
+Valid through: September 30, 2026
+
+Scope
+- Equipment package: $15,750
+- Delivery: $2,750
+- Installation: Not included; confirmation is still required before a revised quote is sent.
+
+Status
+This is the latest approved quote currently stored in the Demo Company workspace.
+Connor approved the amount. Sarah asked whether installation is included.
