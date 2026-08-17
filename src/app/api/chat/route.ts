@@ -5,6 +5,9 @@ import { createServerSupabase } from "@/infrastructure/supabase/server";
 import { createAdminClient } from "@/infrastructure/supabase/admin";
 import { reconcileAuthenticatedEmailIdentity } from "@/domain/parties/authenticated-identity";
 import { linkMentionedCompanies } from "@/domain/business-context/entity-context";
+import { getValidMicrosoftToken } from "@/connectors/microsoft/auth/connection-store";
+import { researchMicrosoftContext } from "@/connectors/microsoft/graph/research";
+import { boundWorkplaceEvidence, shouldResearchWorkplace } from "@/agent/context/workplace-research";
 
 const inputSchema = z.object({ message: z.string().trim().min(1).max(8000), conversationId: z.string().uuid().optional() });
 export async function POST(request: Request) {
@@ -52,7 +55,27 @@ export async function POST(request: Request) {
       supabase.from("commitments").select("description,status,due_at,external_party_aware").eq("organization_id", membership.organization_id).neq("status", "completed").limit(10),
       supabase.from("agent_events").select("action,status,reason,created_at").eq("organization_id", membership.organization_id).order("created_at", { ascending: false }).limit(20),
     ]);
-    const result = await answerWithAlex(parsed.data.message, { activeCompanyIds: companyIds, interactions: interactions.data, tasks: tasks.data, commitments: commitments.data, events: events.data });
+    let workplaceEvidence: ReturnType<typeof boundWorkplaceEvidence> | undefined;
+    if (shouldResearchWorkplace(parsed.data.message)) {
+      const { data: connection } = await admin.from("connections").select("id").eq("organization_id", membership.organization_id).eq("provider", "microsoft").eq("status", "connected").order("updated_at", { ascending: false }).limit(1).maybeSingle();
+      if (connection) {
+        try {
+          const accessToken = await getValidMicrosoftToken(connection.id);
+          const evidence = await researchMicrosoftContext(accessToken, undefined, parsed.data.message);
+          workplaceEvidence = boundWorkplaceEvidence(evidence);
+          const evidenceEvents = [
+            { organization_id: membership.organization_id, agent_id: agent.id, interaction_id: inbound.id, connection_id: connection.id, action: "email.searched", status: "success", reason: `Web request searched Alex's mailbox and found ${evidence.emails.length} candidate messages`, metadata: { query: evidence.emailQuery, resultCount: evidence.emails.length } },
+            { organization_id: membership.organization_id, agent_id: agent.id, interaction_id: inbound.id, connection_id: connection.id, action: "file.searched", status: "success", reason: `Web request searched SharePoint and OneDrive and found ${evidence.files.length} candidate documents`, metadata: { query: evidence.query, resultCount: evidence.files.length } },
+            ...(evidence.files.some((file) => file.sourceType === "driveItem.content") ? [{ organization_id: membership.organization_id, agent_id: agent.id, interaction_id: inbound.id, connection_id: connection.id, action: "file.read", status: "success", reason: "Web request opened bounded document contents for evidence", metadata: { sources: evidence.files.filter((file) => file.sourceType === "driveItem.content").map((file) => ({ name: file.name, url: file.url, extractedCharacters: file.excerpt?.length ?? 0 })) } }] : []),
+          ];
+          await admin.from("agent_events").insert(evidenceEvents);
+        } catch (error) {
+          console.error("web_workplace_research_failed", { connectionId: connection.id, error: error instanceof Error ? error.message : "unknown" });
+          await admin.from("agent_events").insert({ organization_id: membership.organization_id, agent_id: agent.id, interaction_id: inbound.id, connection_id: connection.id, action: "workplace.research", status: "failed", reason: "Microsoft workplace research was unavailable" });
+        }
+      }
+    }
+    const result = await answerWithAlex(parsed.data.message, { activeCompanyIds: companyIds, interactions: interactions.data, tasks: tasks.data, commitments: commitments.data, events: events.data, workplaceEvidence });
     const { data: outbound, error: outboundError } = await admin.from("interactions").insert({ organization_id: membership.organization_id, conversation_id: conversationId, channel: "web", direction: "outbound", sender_party_id: agent.party_id, content_text: result.answer, occurred_at: new Date().toISOString(), participation: { responseTo: inbound.id }, provenance: { rawType: "tripine.agent", model: process.env.OPENAI_MODEL ?? "configured-default" } }).select("id").single();
     if (outboundError || !outbound) throw new Error("Could not persist Alex's response");
     await admin.from("agent_events").insert({ organization_id: membership.organization_id, agent_id: agent.id, interaction_id: outbound.id, action: "web.responded", status: "success", reason: "Alex responded through web chat" });

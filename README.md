@@ -34,6 +34,7 @@ Import this repository into Vercel. See [docs/cloud-setup.md](docs/cloud-setup.m
 - Automatic Outlook subscription creation and daily renewal.
 - Live inbound Outlook processing, participant/thread resolution, Graph mail/file research, and narrow internal auto-replies.
 - Supabase authentication and cross-channel retrieval of email history, tasks, commitments, and events.
+- Live web-chat research across Alex's Outlook, OneDrive, and SharePoint access with bounded evidence and automatic audit events.
 - Tenant-scoped Supabase schema for parties, conversations, interactions, memory, tasks, commitments, events, and approvals.
 - Persistent web interactions, live work/activity panels, immutable external-email approvals, and exactly-once submission guards.
 - Authenticated readiness diagnostics and scenario-focused Outlook/participation tests.
