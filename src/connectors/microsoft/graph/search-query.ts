@@ -1,9 +1,9 @@
 const STOP_WORDS = new Set([
   "a", "about", "alex", "all", "an", "and", "any", "are", "as", "at", "be", "been", "but", "by",
   "can", "check", "could", "did", "do", "does", "email", "files", "find", "for", "forwarded", "from",
-  "get", "has", "have", "he", "her", "him", "his", "i", "if", "in", "is", "it", "latest", "me",
+  "get", "has", "have", "he", "her", "him", "his", "how", "i", "if", "in", "is", "it", "latest", "me",
   "message", "microsoft", "of", "on", "or", "our", "outlook", "please", "question", "re", "reply",
-  "real", "search", "sent", "she", "should", "state", "tell", "that", "the", "their", "them", "there", "they", "this",
+  "compare", "compared", "happened", "real", "said", "say", "search", "sent", "she", "should", "state", "tell", "that", "the", "their", "them", "there", "they", "this",
   "to", "us", "was", "we", "were", "what", "when", "whether", "which", "who", "will", "with", "would",
   "you", "your", "now", "verified", "amount",
 ]);

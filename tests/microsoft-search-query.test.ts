@@ -40,6 +40,13 @@ describe("Microsoft workplace search queries", () => {
     ]);
   });
 
+  it("keeps the business entity and document type in a cross-channel comparison", () => {
+    expect(buildMicrosoftSearchQueries(
+      undefined,
+      "What did Sarah say about ABC, and how does it compare with the latest quote?",
+    ).fileQuery).toBe("Sarah ABC quote");
+  });
+
   it("matches a recently created root file without relying on search indexing", () => {
     expect(fileNameMatchesQuery("ABC Manufacturing Quote v3.txt", "ABC Manufacturing Quote v3")).toBe(true);
     expect(fileNameMatchesQuery("Unrelated Customer Contract.pdf", "ABC Manufacturing Quote v3")).toBe(false);
