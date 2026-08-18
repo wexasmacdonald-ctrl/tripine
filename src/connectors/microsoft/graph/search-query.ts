@@ -49,6 +49,15 @@ export function buildMicrosoftSearchQueries(subject: string | undefined, content
   };
 }
 
+export function buildMicrosoftMailSearchQueries(emailQuery: string, fileQuery: string) {
+  const fileTerms = unique(tokens(fileQuery));
+  return unique([
+    emailQuery,
+    fileQuery,
+    fileTerms[0] ?? "",
+  ]).filter(Boolean).slice(0, 3);
+}
+
 export function fileNameMatchesQuery(name: string, query: string) {
   const normalizedName = name.toLowerCase();
   const terms = unique(tokens(query).map((term) => term.toLowerCase()));

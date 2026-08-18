@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildMicrosoftSearchQueries, fileNameMatchesQuery } from "../src/connectors/microsoft/graph/search-query";
+import { buildMicrosoftMailSearchQueries, buildMicrosoftSearchQueries, fileNameMatchesQuery } from "../src/connectors/microsoft/graph/search-query";
 
 describe("Microsoft workplace search queries", () => {
   it("reduces a natural employee request to the business document identity", () => {
@@ -27,6 +27,17 @@ describe("Microsoft workplace search queries", () => {
       "ABC quote final channel verification",
       "Verify the latest shared ABC Manufacturing quote using live Microsoft files.",
     ).fileQuery).toBe("ABC quote");
+  });
+
+  it("adds a participant fallback so differently worded replies are discoverable", () => {
+    expect(buildMicrosoftMailSearchQueries(
+      "Sarah ABC Manufacturing quote confirmed asked",
+      "Sarah ABC",
+    )).toEqual([
+      "Sarah ABC Manufacturing quote confirmed asked",
+      "Sarah ABC",
+      "Sarah",
+    ]);
   });
 
   it("matches a recently created root file without relying on search indexing", () => {

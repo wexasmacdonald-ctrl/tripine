@@ -3,7 +3,7 @@ import OpenAI from "openai";
 import { graphFetch } from "./client";
 import { env } from "@/infrastructure/env";
 import { extractDocumentText, MAX_FILE_BYTES, supportsTextExtraction } from "@/connectors/microsoft/files/extract-text";
-import { buildMicrosoftSearchQueries, fileNameMatchesQuery } from "./search-query";
+import { buildMicrosoftMailSearchQueries, buildMicrosoftSearchQueries, fileNameMatchesQuery } from "./search-query";
 import { dedupeLatestNamedFiles, DriveResource, rankAndMergeDriveHits } from "./drive-results";
 
 type MailSearch = { value?: Array<{ id: string; subject?: string; bodyPreview?: string; receivedDateTime?: string; from?: { emailAddress?: { name?: string; address?: string } } }> };
@@ -13,11 +13,18 @@ type DriveSearchResponse = { value?: DriveResource[] };
 
 export async function researchMicrosoftContext(accessToken: string, subject: string | undefined, content: string) {
   const { emailQuery, fileQuery } = buildMicrosoftSearchQueries(subject, content);
-  const mailPath = `/me/messages?${new URLSearchParams({ "$search": `\"${emailQuery.replaceAll('"', '')}\"`, "$select": "id,subject,bodyPreview,receivedDateTime,from", "$top": "8" })}`;
+  const mailQueries = buildMicrosoftMailSearchQueries(emailQuery, fileQuery);
+  const searchMail = Promise.all(mailQueries.map((query) => {
+    const path = `/me/messages?${new URLSearchParams({ "$search": `\"${query.replaceAll('"', '')}\"`, "$select": "id,subject,bodyPreview,receivedDateTime,from", "$top": "8" })}`;
+    return graphFetch<MailSearch>(accessToken, path, { headers: { ConsistencyLevel: "eventual" } }).catch(() => ({ value: [] }));
+  })).then((results) => {
+    const seen = new Set<string>();
+    return { value: results.flatMap((result) => result.value ?? []).filter((message) => message.id && !seen.has(message.id) && Boolean(seen.add(message.id))).slice(0, 12) };
+  });
   const fileSelect = "id,name,webUrl,lastModifiedDateTime,size,file,parentReference,remoteItem";
   const encodedFileQuery = encodeURIComponent(fileQuery.replaceAll("'", "''"));
   const [mail, searchFiles, sharedDriveFiles, driveFiles, rootChildren] = await Promise.all([
-    graphFetch<MailSearch>(accessToken, mailPath, { headers: { ConsistencyLevel: "eventual" } }).catch(() => ({ value: [] })),
+    searchMail,
     graphFetch<SearchResponse>(accessToken, "/search/query", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ requests: [{ entityTypes: ["driveItem"], query: { queryString: fileQuery }, from: 0, size: 8 }] }) }).catch(() => ({ value: [] })),
     graphFetch<DriveSearchResponse>(accessToken, `/me/drive/search(q='${encodedFileQuery}')?${new URLSearchParams({ "$select": fileSelect, "$top": "8" })}`).catch(() => ({ value: [] })),
     graphFetch<DriveSearchResponse>(accessToken, `/me/drive/root/search(q='${encodedFileQuery}')?${new URLSearchParams({ "$select": fileSelect, "$top": "8" })}`).catch(() => ({ value: [] })),
