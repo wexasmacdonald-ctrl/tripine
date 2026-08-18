@@ -47,6 +47,11 @@ function plainText(content: string, contentType?: string) {
     .trim();
 }
 
+function forwardedSegment(content: string) {
+  const author = content.match(/^\s*From:\s*(.+)$/im)?.[1]?.trim();
+  return { author, content: content.trim(), confidence: author ? 0.75 : 0.6 };
+}
+
 export class OutlookEmailChannelAdapter implements ChannelAdapter<GraphMessage> {
   channel = "email" as const;
   async normalizeInbound(raw: GraphMessage, context: { organizationId: string; agentId: string; agentAddress: string; verifiedInternalAddresses?: string[] }): Promise<InboundInteraction> {
@@ -62,7 +67,7 @@ export class OutlookEmailChannelAdapter implements ChannelAdapter<GraphMessage> 
       organizationId: context.organizationId, agentId: context.agentId, channel: "email",
       sender: participant(raw.from ?? {}, undefined, verifiedAddresses), recipients: [...to, ...cc, ...bcc], subject: raw.subject,
       content: parts[0].trim(), occurredAt: raw.receivedDateTime ?? new Date().toISOString(), attachments: (raw.attachments ?? []).map((item) => ({ id: item.id, name: item.name ?? "attachment", contentType: item.contentType ?? "application/octet-stream", size: item.size ?? 0, source: "channel" as const })),
-      forwardedSegments: parts.slice(1).map((segment) => ({ content: segment, confidence: 0.6 })),
+      forwardedSegments: parts.slice(1).map(forwardedSegment),
       channelThread: { externalThreadId: raw.conversationId, externalMessageId: raw.id, internetMessageId: raw.internetMessageId, replyToMessageId: headers.get("in-reply-to"), references: headers.get("references")?.split(/\s+/) },
       participation: { addressedToAgent: [...to, ...cc].some((r) => r.address === context.agentAddress.toLowerCase()), agentWasToRecipient: to.some((r) => r.address === context.agentAddress.toLowerCase()), agentWasCcRecipient: cc.some((r) => r.address === context.agentAddress.toLowerCase()), agentWasBccRecipient: bcc.some((r) => r.address === context.agentAddress.toLowerCase()), explicitMention: new RegExp(`\\b${context.agentAddress.split("@")[0]}\\b`, "i").test(parts[0]) },
       provenance: { rawType: "microsoft.graph.message", untrusted: true },

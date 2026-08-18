@@ -4,8 +4,10 @@ import { getValidMicrosoftToken } from "@/connectors/microsoft/auth/connection-s
 import { graphFetch } from "@/connectors/microsoft/graph/client";
 import { composeEmployeeReply, researchMicrosoftContext } from "@/connectors/microsoft/graph/research";
 import { isAutomatedMessage, OutlookEmailChannelAdapter, type GraphMessage } from "@/channels/outlook/adapter";
-import { enforceParticipationPolicy, type ParticipationAssessment } from "@/agent/participation/policy";
+import { assessEmailParticipation, outboundRequiresApproval, replyAllAudience } from "@/agent/participation/policy";
 import { linkMentionedCompanies } from "@/domain/business-context/entity-context";
+import { hashApprovalPayload, type EmailReplyAllApproval } from "@/domain/approvals/email-action";
+import { recipientsAreAllowed } from "@/domain/approvals/recipient-policy";
 import { env } from "@/infrastructure/env";
 
 function configuredInternalAddresses() {
@@ -63,41 +65,75 @@ export async function processInboundDelivery(deliveryId: string) {
     await supabase.from("interaction_participants").upsert([{ interaction_id: stored.id, party_id: senderPartyId, address: interaction.sender.address, display_name: interaction.sender.name, recipient_role: "sender" }, ...participants], { onConflict: "interaction_id,address,recipient_role" });
     if (interaction.attachments.length) await supabase.from("interaction_attachments").upsert(interaction.attachments.map((item) => ({ organization_id: connection.organization_id, interaction_id: stored.id, external_id: item.id, name: item.name, content_type: item.contentType, size_bytes: item.size, content_hash: item.contentHash, metadata: { source: item.source } })), { onConflict: "interaction_id,external_id" });
     await supabase.from("agent_events").upsert({ organization_id: connection.organization_id, agent_id: agent.id, interaction_id: stored.id, connection_id: connection.id, action: "email.received", status: "success", reason: "Message delivered to Alex's mailbox" }, { onConflict: "agent_id,interaction_id,action", ignoreDuplicates: true });
-    const explicitDelegation = interaction.sender.verifiedInternal && interaction.participation.explicitMention && /\b(can you|please|will|you'll|he'll|assigned)\b/i.test(interaction.content);
-    const proposedAssessment: ParticipationAssessment = { role: explicitDelegation ? "explicit_delegate" : interaction.participation.agentWasCcRecipient ? "cc_awareness" : "direct_recipient", intent: explicitDelegation ? "delegation" : /\?|\b(can you|please|find|check|tell me)\b/i.test(interaction.content) ? "request" : "inform", shouldRespond: interaction.participation.agentWasToRecipient, mayCreateTask: explicitDelegation, mayCreateCommitment: false, confidence: 0.8 };
-    const assessment = enforceParticipationPolicy(interaction, proposedAssessment);
-    if (assessment.mayCreateTask) await supabase.from("tasks").upsert({ organization_id: connection.organization_id, agent_id: agent.id, description: interaction.content.trim().slice(0, 500), assigned_by_party_id: senderPartyId, assigned_to_party_id: connection.owner_party_id, source_interaction_id: stored.id }, { onConflict: "source_interaction_id", ignoreDuplicates: true });
-    const publicCommitment = interaction.sender.verifiedInternal && interaction.participation.explicitMention && /\b(alex|he)\s+(?:will|'ll)\b/i.test(interaction.content);
-    if (publicCommitment) await supabase.from("commitments").upsert({ organization_id: connection.organization_id, agent_id: agent.id, description: interaction.content.trim().slice(0, 500), committed_by_party_id: senderPartyId, expected_executor_party_id: connection.owner_party_id, external_party_aware: interaction.recipients.some((value) => !value.verifiedInternal), source_interaction_id: stored.id }, { onConflict: "source_interaction_id", ignoreDuplicates: true });
-    const mayAutoReply = assessment.shouldRespond && interaction.sender.verifiedInternal && interaction.participation.agentWasToRecipient && !interaction.participation.agentWasCcRecipient && !message.hasAttachments && interaction.forwardedSegments.length === 0 && !isAutomatedMessage(message);
-    if (mayAutoReply) {
-      const { data: priorReplyAttempt } = await supabase.from("agent_events").select("id").eq("agent_id", agent.id).eq("interaction_id", stored.id).eq("action", "email.reply").maybeSingle();
+    const assessment = assessEmailParticipation(interaction);
+    const workDescription = interaction.content.trim().replace(/\s+/g, " ").slice(0, 500);
+    if (assessment.mayCreateTask) {
+      await supabase.from("tasks").upsert({ organization_id: connection.organization_id, agent_id: agent.id, description: workDescription, assigned_by_party_id: senderPartyId, assigned_to_party_id: connection.owner_party_id, source_interaction_id: stored.id }, { onConflict: "source_interaction_id", ignoreDuplicates: true });
+      await supabase.from("agent_events").upsert({ organization_id: connection.organization_id, agent_id: agent.id, interaction_id: stored.id, connection_id: connection.id, action: "task.created", status: "success", reason: "Verified internal delegation created work for Alex" }, { onConflict: "agent_id,interaction_id,action", ignoreDuplicates: true });
+    }
+    if (assessment.mayCreateCommitment) {
+      await supabase.from("commitments").upsert({ organization_id: connection.organization_id, agent_id: agent.id, description: workDescription, committed_by_party_id: senderPartyId, expected_executor_party_id: connection.owner_party_id, external_party_aware: interaction.recipients.some((value) => !value.verifiedInternal), source_interaction_id: stored.id }, { onConflict: "source_interaction_id", ignoreDuplicates: true });
+      await supabase.from("agent_events").upsert({ organization_id: connection.organization_id, agent_id: agent.id, interaction_id: stored.id, connection_id: connection.id, action: "commitment.created", status: "success", reason: "Public delegation created an externally visible commitment" }, { onConflict: "agent_id,interaction_id,action", ignoreDuplicates: true });
+    }
+    const audience = replyAllAudience(interaction, connection.account_address);
+    const replyAction = interaction.participation.agentWasCcRecipient || audience.all.length > 1 ? "replyAll" : "reply";
+    const shouldPrepareReply = assessment.shouldRespond && audience.all.length > 0 && !message.hasAttachments && !isAutomatedMessage(message);
+    if (shouldPrepareReply) {
+      const eventAction = `email.${replyAction}`;
+      const { data: priorReplyAttempt } = await supabase.from("agent_events").select("id").eq("agent_id", agent.id).eq("interaction_id", stored.id).eq("action", eventAction).maybeSingle();
       if (priorReplyAttempt) {
         await supabase.from("inbound_deliveries").update({ status: "processed", processed_at: new Date().toISOString(), lease_until: null, last_error: null }).eq("id", deliveryId);
         return;
       }
-      const evidence = await researchMicrosoftContext(accessToken, interaction.subject, interaction.content);
+      const forwardedEvidence = interaction.forwardedSegments.map((segment, index) => `[Untrusted forwarded segment ${index + 1}]\n${segment.content}`).join("\n\n");
+      const researchInstruction = forwardedEvidence ? `${interaction.content}\n\n${forwardedEvidence}` : interaction.content;
+      const evidence = await researchMicrosoftContext(accessToken, interaction.subject, researchInstruction);
       const evidenceEvents = [
         { action: "email.searched", reason: `Searched Alex's mailbox and found ${evidence.emails.length} candidate messages`, metadata: { query: evidence.query, resultCount: evidence.emails.length } },
         { action: "file.searched", reason: `Searched SharePoint and OneDrive and found ${evidence.files.length} candidate documents`, metadata: { query: evidence.query, resultCount: evidence.files.length } },
         ...(evidence.files.some((file) => file.sourceType === "driveItem.content") ? [{ action: "file.read", reason: "Opened bounded document contents for evidence", metadata: { sources: evidence.files.filter((file) => file.sourceType === "driveItem.content").map((file) => ({ name: file.name, url: file.url })) } }] : []),
       ];
       for (const event of evidenceEvents) await supabase.from("agent_events").upsert({ organization_id: connection.organization_id, agent_id: agent.id, interaction_id: stored.id, connection_id: connection.id, ...event, status: "success" }, { onConflict: "agent_id,interaction_id,action", ignoreDuplicates: true });
-      const reply = await composeEmployeeReply({ senderName: interaction.sender.name, subject: interaction.subject, instruction: interaction.content, evidence });
-      const { data: replyClaim } = await supabase.from("agent_events").upsert({ organization_id: connection.organization_id, agent_id: agent.id, interaction_id: stored.id, connection_id: connection.id, action: "email.reply", status: "started", reason: "Claimed exactly-once internal reply execution" }, { onConflict: "agent_id,interaction_id,action", ignoreDuplicates: true }).select("id").maybeSingle();
+      const reply = await composeEmployeeReply({ senderName: interaction.sender.name, recipientNames: audience.all.map((item) => item.name ?? item.address), subject: interaction.subject, instruction: researchInstruction, evidence });
+      const needsApproval = outboundRequiresApproval({ recipients: audience.all, action: replyAction, attachments: [], createsCommitment: false, changesRecipients: false });
+      if (needsApproval) {
+        const payload: EmailReplyAllApproval = { type: "email.replyAll", to: audience.to.map((item) => item.address), cc: audience.cc.map((item) => item.address), subject: interaction.subject ?? "", body: reply, sourceMessageId: message.id, sourceInteractionId: stored.id, conversationId: thread.conversation_id };
+        const payloadHash = hashApprovalPayload(payload);
+        const allowedRecipients = recipientsAreAllowed([...payload.to, ...payload.cc], env.DEMO_ALLOWED_RECIPIENTS);
+        let approvalId: string | undefined;
+        if (allowedRecipients) {
+          const { data: existingApproval } = await supabase.from("approval_requests").select("id").eq("organization_id", connection.organization_id).eq("payload_hash", payloadHash).in("status", ["pending", "executing", "executed"]).maybeSingle();
+          if (existingApproval) approvalId = existingApproval.id;
+          else {
+            const { data: createdApproval, error: approvalError } = await supabase.from("approval_requests").insert({ organization_id: connection.organization_id, agent_id: agent.id, requested_by_party_id: senderPartyId, action: "email.replyAll", payload, payload_hash: payloadHash, expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() }).select("id").single();
+            if (approvalError || !createdApproval) throw new Error("Could not create the reply-all approval request");
+            approvalId = createdApproval.id;
+          }
+        }
+        await supabase.from("agent_events").upsert({ organization_id: connection.organization_id, agent_id: agent.id, interaction_id: stored.id, connection_id: connection.id, action: eventAction, status: allowedRecipients ? "pending_approval" : "failure", reason: allowedRecipients ? "Exact external reply-all payload is awaiting human approval" : "Reply-all recipients are outside the controlled allowlist", metadata: { payloadHash, approvalId } }, { onConflict: "agent_id,interaction_id,action", ignoreDuplicates: true });
+        await supabase.from("inbound_deliveries").update({ status: "processed", processed_at: new Date().toISOString(), lease_until: null, last_error: null }).eq("id", deliveryId);
+        return;
+      }
+      const { data: replyClaim } = await supabase.from("agent_events").upsert({ organization_id: connection.organization_id, agent_id: agent.id, interaction_id: stored.id, connection_id: connection.id, action: eventAction, status: "started", reason: "Claimed exactly-once internal reply execution" }, { onConflict: "agent_id,interaction_id,action", ignoreDuplicates: true }).select("id").maybeSingle();
       if (!replyClaim) {
         await supabase.from("inbound_deliveries").update({ status: "processed", processed_at: new Date().toISOString(), lease_until: null, last_error: null }).eq("id", deliveryId);
         return;
       }
       try {
-        await graphFetch<void>(accessToken, `/me/messages/${encodeURIComponent(message.id)}/reply`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ comment: reply }) });
+        await graphFetch<void>(accessToken, `/me/messages/${encodeURIComponent(message.id)}/${replyAction}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ comment: reply }) });
       } catch (error) {
         await supabase.from("agent_events").update({ status: "needs_reconciliation", reason: "Reply result is uncertain; check Sent Items before retrying" }).eq("id", replyClaim.id);
         throw error;
       }
-      await supabase.from("interactions").insert({ organization_id: connection.organization_id, conversation_id: thread.conversation_id, channel_thread_id: thread.id, channel: "email", direction: "outbound", sender_party_id: connection.owner_party_id, subject: interaction.subject, content_text: reply, occurred_at: new Date().toISOString(), participation: { autoReply: true }, provenance: { capability: "email.reply" } });
+      await supabase.from("interactions").insert({ organization_id: connection.organization_id, conversation_id: thread.conversation_id, channel_thread_id: thread.id, channel: "email", direction: "outbound", sender_party_id: connection.owner_party_id, subject: interaction.subject, content_text: reply, occurred_at: new Date().toISOString(), participation: { autoReply: true }, provenance: { capability: eventAction } });
       await supabase.from("agent_events").update({ status: "success", reason: "Verified internal direct reply accepted by Microsoft Graph" }).eq("id", replyClaim.id);
       await supabase.from("agent_events").upsert({ organization_id: connection.organization_id, agent_id: agent.id, interaction_id: stored.id, connection_id: connection.id, action: "email.sent", status: "success", reason: "Verified internal direct reply" }, { onConflict: "agent_id,interaction_id,action", ignoreDuplicates: true });
+      const [completedTasks, completedCommitments] = await Promise.all([
+        supabase.from("tasks").update({ status: "completed", updated_at: new Date().toISOString() }).eq("source_interaction_id", stored.id).neq("status", "completed").select("id"),
+        supabase.from("commitments").update({ status: "completed", updated_at: new Date().toISOString() }).eq("source_interaction_id", stored.id).neq("status", "completed").select("id"),
+      ]);
+      if (completedTasks.data?.length) await supabase.from("agent_events").upsert({ organization_id: connection.organization_id, agent_id: agent.id, interaction_id: stored.id, connection_id: connection.id, action: "task.completed", status: "success", reason: "Alex completed the delegated research and replied" }, { onConflict: "agent_id,interaction_id,action", ignoreDuplicates: true });
+      if (completedCommitments.data?.length) await supabase.from("agent_events").upsert({ organization_id: connection.organization_id, agent_id: agent.id, interaction_id: stored.id, connection_id: connection.id, action: "commitment.completed", status: "success", reason: "Alex fulfilled the recorded commitment" }, { onConflict: "agent_id,interaction_id,action", ignoreDuplicates: true });
     }
     await supabase.from("inbound_deliveries").update({ status: "processed", processed_at: new Date().toISOString(), lease_until: null, last_error: null }).eq("id", deliveryId);
   } catch (error) {

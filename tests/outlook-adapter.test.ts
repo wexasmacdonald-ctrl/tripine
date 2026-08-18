@@ -41,6 +41,7 @@ describe("OutlookEmailChannelAdapter", () => {
     const interaction = await new OutlookEmailChannelAdapter().normalizeInbound(message({ body: { contentType: "text", content: "Alex, assess the impact.\n\n---------- Forwarded message ----------\nFrom: Vendor\nPrices rise 8%." }, attachments: [{ id: "a1", name: "pricing.pdf", contentType: "application/pdf", size: 4200 }] }), context);
     expect(interaction.content).toBe("Alex, assess the impact.");
     expect(interaction.forwardedSegments[0]?.content).toContain("Prices rise 8%");
+    expect(interaction.forwardedSegments[0]?.author).toBe("Vendor");
     expect(interaction.forwardedSegments[0]?.confidence).toBeLessThan(1);
     expect(interaction.attachments[0]).toMatchObject({ id: "a1", name: "pricing.pdf", size: 4200 });
   });

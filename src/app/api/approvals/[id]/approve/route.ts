@@ -1,12 +1,9 @@
-import { createHash } from "node:crypto";
 import { createServerSupabase } from "@/infrastructure/supabase/server";
 import { createAdminClient } from "@/infrastructure/supabase/admin";
 import { getValidMicrosoftToken } from "@/connectors/microsoft/auth/connection-store";
 import { env } from "@/infrastructure/env";
 import { recipientsAreAllowed } from "@/domain/approvals/recipient-policy";
-
-type EmailPayload = { type: "email.send"; to: string[]; cc: string[]; subject: string; body: string };
-function canonical(value: unknown) { return JSON.stringify(value, Object.keys(value as object).sort()); }
+import { hashApprovalPayload, type EmailApprovalPayload } from "@/domain/approvals/email-action";
 
 export async function POST(_request: Request, context: RouteContext<"/api/approvals/[id]/approve">) {
   const { id } = await context.params;
@@ -23,22 +20,40 @@ export async function POST(_request: Request, context: RouteContext<"/api/approv
     await admin.from("approval_requests").update({ status: "expired" }).eq("id", id).eq("status", "pending");
     return Response.json({ error: "Approval request expired." }, { status: 410 });
   }
-  const payload = approval.payload as EmailPayload;
-  if (createHash("sha256").update(canonical(payload)).digest("hex") !== approval.payload_hash) return Response.json({ error: "Approval payload integrity check failed." }, { status: 409 });
+  const payload = approval.payload as EmailApprovalPayload;
+  if (hashApprovalPayload(payload) !== approval.payload_hash) return Response.json({ error: "Approval payload integrity check failed." }, { status: 409 });
   if (!recipientsAreAllowed([...payload.to, ...payload.cc], env.DEMO_ALLOWED_RECIPIENTS)) return Response.json({ error: "A recipient is no longer in the controlled demo allowlist." }, { status: 403 });
   const { data: claimed } = await admin.from("approval_requests").update({ status: "executing", decided_by_user_id: user.id, decided_at: new Date().toISOString() }).eq("id", id).eq("status", "pending").select("id").maybeSingle();
   if (!claimed) return Response.json({ error: "Approval is already being executed." }, { status: 409 });
-  const { data: connection } = await admin.from("connections").select("id").eq("organization_id", membership.organization_id).eq("provider", "microsoft").eq("owner_type", "service").eq("status", "connected").single();
+  const { data: connection } = await admin.from("connections").select("id,owner_party_id").eq("organization_id", membership.organization_id).eq("provider", "microsoft").eq("owner_type", "service").eq("status", "connected").single();
   if (!connection) {
     await admin.from("approval_requests").update({ status: "pending" }).eq("id", id).eq("status", "executing");
     return Response.json({ error: "Connect Alex's Microsoft mailbox first." }, { status: 503 });
   }
   try {
     const token = await getValidMicrosoftToken(connection.id);
-    const response = await fetch("https://graph.microsoft.com/v1.0/me/sendMail", { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify({ message: { subject: payload.subject, body: { contentType: "Text", content: payload.body }, toRecipients: payload.to.map((address) => ({ emailAddress: { address } })), ccRecipients: payload.cc.map((address) => ({ emailAddress: { address } })) }, saveToSentItems: true }), cache: "no-store" });
+    const endpoint = payload.type === "email.replyAll"
+      ? `https://graph.microsoft.com/v1.0/me/messages/${encodeURIComponent(payload.sourceMessageId)}/replyAll`
+      : "https://graph.microsoft.com/v1.0/me/sendMail";
+    const requestBody = payload.type === "email.replyAll"
+      ? { comment: payload.body }
+      : { message: { subject: payload.subject, body: { contentType: "Text", content: payload.body }, toRecipients: payload.to.map((address) => ({ emailAddress: { address } })), ccRecipients: payload.cc.map((address) => ({ emailAddress: { address } })) }, saveToSentItems: true };
+    const response = await fetch(endpoint, { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify(requestBody), cache: "no-store" });
     if (response.status === 202) {
       await admin.from("approval_requests").update({ status: "executed" }).eq("id", id).eq("status", "executing");
-      await admin.from("agent_events").insert({ organization_id: membership.organization_id, agent_id: approval.agent_id, connection_id: connection.id, action: "email.sent", status: "success", reason: "Approved immutable payload accepted by Microsoft Graph", metadata: { approvalId: id, payloadHash: approval.payload_hash } });
+      if (payload.type === "email.replyAll") {
+        const { data: outbound } = await admin.from("interactions").insert({ organization_id: membership.organization_id, conversation_id: payload.conversationId, channel: "email", direction: "outbound", sender_party_id: connection.owner_party_id, subject: payload.subject, content_text: payload.body, occurred_at: new Date().toISOString(), participation: { approvedReplyAll: true }, provenance: { capability: "email.replyAll", approvalId: id } }).select("id").single();
+        const [completedTasks, completedCommitments] = await Promise.all([
+          admin.from("tasks").update({ status: "completed", updated_at: new Date().toISOString() }).eq("source_interaction_id", payload.sourceInteractionId).neq("status", "completed").select("id"),
+          admin.from("commitments").update({ status: "completed", updated_at: new Date().toISOString() }).eq("source_interaction_id", payload.sourceInteractionId).neq("status", "completed").select("id"),
+        ]);
+        await admin.from("agent_events").upsert([
+          { organization_id: membership.organization_id, agent_id: approval.agent_id, interaction_id: payload.sourceInteractionId, connection_id: connection.id, action: "email.replyAll", status: "success", reason: "Human-approved reply-all accepted by Microsoft Graph", metadata: { approvalId: id, outboundInteractionId: outbound?.id } },
+          ...((completedTasks.data?.length ?? 0) ? [{ organization_id: membership.organization_id, agent_id: approval.agent_id, interaction_id: payload.sourceInteractionId, connection_id: connection.id, action: "task.completed", status: "success", reason: "Delegated research was reported to the thread" }] : []),
+          ...((completedCommitments.data?.length ?? 0) ? [{ organization_id: membership.organization_id, agent_id: approval.agent_id, interaction_id: payload.sourceInteractionId, connection_id: connection.id, action: "commitment.completed", status: "success", reason: "Public commitment was fulfilled by the approved reply-all" }] : []),
+        ], { onConflict: "agent_id,interaction_id,action" });
+      }
+      await admin.from("agent_events").insert({ organization_id: membership.organization_id, agent_id: approval.agent_id, connection_id: connection.id, action: "email.sent", status: "success", reason: "Approved immutable payload accepted by Microsoft Graph", metadata: { approvalId: id, payloadHash: approval.payload_hash, type: payload.type } });
       return Response.json({ status: "executed" });
     }
     if (response.status >= 400 && response.status < 500) {
