@@ -1,9 +1,10 @@
 import { env, isPersistenceConfigured } from "@/infrastructure/env";
 import { createServerSupabase } from "@/infrastructure/supabase/server";
 import { createAdminClient } from "@/infrastructure/supabase/admin";
+import { configuredModelProvider, isModelConfigured } from "@/agent/models/client";
 
 export async function GET() {
-  if (!isPersistenceConfigured) return Response.json({ ready: false, mode: "demo", checks: { supabase: false, openai: Boolean(env.OPENAI_API_KEY), microsoft: Boolean(env.MICROSOFT_CLIENT_ID && env.MICROSOFT_CLIENT_SECRET), encryption: Boolean(env.CREDENTIAL_ENCRYPTION_KEY), jobs: Boolean(env.INTERNAL_JOB_SECRET && (env.CRON_SECRET || env.INTERNAL_JOB_SECRET)) } });
+  if (!isPersistenceConfigured) return Response.json({ ready: false, mode: "demo", modelProvider: configuredModelProvider(), checks: { supabase: false, model: isModelConfigured(), microsoft: Boolean(env.MICROSOFT_CLIENT_ID && env.MICROSOFT_CLIENT_SECRET), encryption: Boolean(env.CREDENTIAL_ENCRYPTION_KEY), jobs: Boolean(env.INTERNAL_JOB_SECRET && (env.CRON_SECRET || env.INTERNAL_JOB_SECRET)) } });
   const supabase = await createServerSupabase();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: "Sign in is required." }, { status: 401 });
@@ -22,6 +23,6 @@ export async function GET() {
   const requiredGraphScopes = ["mail.read", "mail.send", "files.read.all"];
   const graphPermissionsGranted = requiredGraphScopes.every((scope) => grantedScopes.has(scope));
   const subscribed = subscriptions?.some((item) => item.status === "active" && new Date(item.expires_at).getTime() > Date.now()) ?? false;
-  const checks = { database: true, agentSeeded: Boolean(agents?.length), signedInUserEmailVerified: Boolean(identities?.length), internalIdentityAllowlist: Boolean(env.DEMO_INTERNAL_EMAILS?.trim()), openai: Boolean(env.OPENAI_API_KEY), microsoftEnvironment: Boolean(env.MICROSOFT_CLIENT_ID && env.MICROSOFT_CLIENT_SECRET && env.MICROSOFT_GRAPH_CLIENT_STATE), encryption: Boolean(env.CREDENTIAL_ENCRYPTION_KEY), outboundRecipientAllowlist: Boolean(env.DEMO_ALLOWED_RECIPIENTS?.trim()), alexConnected: connected, graphPermissionsGranted, webhookSubscribed: subscribed, failedDeliveries: failedDeliveries ?? 0 };
-  return Response.json({ ready: Object.entries(checks).every(([key, value]) => key === "failedDeliveries" ? value === 0 : Boolean(value)), mode: "connected", checks });
+  const checks = { database: true, agentSeeded: Boolean(agents?.length), signedInUserEmailVerified: Boolean(identities?.length), internalIdentityAllowlist: Boolean(env.DEMO_INTERNAL_EMAILS?.trim()), model: isModelConfigured(), microsoftEnvironment: Boolean(env.MICROSOFT_CLIENT_ID && env.MICROSOFT_CLIENT_SECRET && env.MICROSOFT_GRAPH_CLIENT_STATE), encryption: Boolean(env.CREDENTIAL_ENCRYPTION_KEY), outboundRecipientAllowlist: Boolean(env.DEMO_ALLOWED_RECIPIENTS?.trim()), alexConnected: connected, graphPermissionsGranted, webhookSubscribed: subscribed, failedDeliveries: failedDeliveries ?? 0 };
+  return Response.json({ ready: Object.entries(checks).every(([key, value]) => key === "failedDeliveries" ? value === 0 : Boolean(value)), mode: "connected", modelProvider: configuredModelProvider(), checks });
 }

@@ -8,6 +8,9 @@ const serverSchema = z.object({
   SUPABASE_SECRET_KEY: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().default("gpt-5.6-terra"),
+  AZURE_OPENAI_API_KEY: z.string().optional(),
+  AZURE_OPENAI_ENDPOINT: z.string().url().optional(),
+  AZURE_OPENAI_DEPLOYMENT: z.string().optional(),
   MICROSOFT_TENANT_ID: z.string().default("organizations"),
   MICROSOFT_CLIENT_ID: z.string().optional(),
   MICROSOFT_CLIENT_SECRET: z.string().optional(),
@@ -20,6 +23,15 @@ const serverSchema = z.object({
   DEMO_AGENT_EMAIL: z.string().email().optional(),
   DEMO_INTERNAL_EMAILS: z.string().optional(),
   DEMO_ALLOWED_RECIPIENTS: z.string().optional(),
+}).superRefine((value, context) => {
+  const azureValues = [value.AZURE_OPENAI_API_KEY, value.AZURE_OPENAI_ENDPOINT, value.AZURE_OPENAI_DEPLOYMENT];
+  if (azureValues.some(Boolean) && !azureValues.every(Boolean)) {
+    context.addIssue({
+      code: "custom",
+      path: ["AZURE_OPENAI_ENDPOINT"],
+      message: "AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT, and AZURE_OPENAI_DEPLOYMENT must be configured together.",
+    });
+  }
 });
 export const env = serverSchema.parse(process.env);
 export const isPersistenceConfigured = Boolean(

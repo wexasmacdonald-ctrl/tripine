@@ -35,7 +35,7 @@ export async function GET() {
     ...delivery,
     last_error: delivery.last_error
       ? /api key|openai|401/i.test(delivery.last_error)
-        ? "Model authentication failed during this delivery. Replace OPENAI_API_KEY; newer deliveries use a safe evidence-only fallback."
+        ? "Model authentication failed during this delivery. Check the configured Azure OpenAI credentials and deployment; newer deliveries use a safe evidence-only fallback."
         : delivery.last_error.slice(0, 220)
       : null,
   }));

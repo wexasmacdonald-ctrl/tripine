@@ -33,9 +33,11 @@ Copy the project URL, publishable key, and a new `sb_secret_...` key. The secret
 
 Use Connor's actual Microsoft mailbox address as his Supabase Auth email. When Connor signs into Tripine, the server binds that authenticated address to Connor's party as a verified internal communication identity. Sign Connor into Tripine before the first Outlook scenario.
 
-## 3. OpenAI
+## 3. Azure OpenAI
 
-Create an API project with a small spend limit. Copy its API key. Tripine calls the Responses API with `store: false`; Supabase remains the application state store.
+In the Azure subscription Connor approves, create an Azure OpenAI resource and deploy a model that supports the Responses API. Copy the resource endpoint, API key, and deployment name. The deployment name—not the underlying catalog model name—is supplied in API calls.
+
+Tripine uses the Azure OpenAI v1 Responses endpoint and `store: false`; Supabase remains the application state store. Azure configuration takes precedence if both Azure and direct OpenAI credentials exist. Direct OpenAI remains an optional development fallback so the model gateway is provider-neutral.
 
 ## 4. Microsoft Entra application
 
@@ -62,8 +64,9 @@ Import `wexasmacdonald-ctrl/tripine`. Add all variables from `.env.example` for 
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
 - `SUPABASE_SECRET_KEY`
-- `OPENAI_API_KEY`
-- `OPENAI_MODEL=gpt-5.6-terra`
+- `AZURE_OPENAI_API_KEY`
+- `AZURE_OPENAI_ENDPOINT=https://YOUR-RESOURCE-NAME.openai.azure.com`
+- `AZURE_OPENAI_DEPLOYMENT` (the exact Azure model deployment name)
 - `MICROSOFT_TENANT_ID` (the tenant GUID)
 - `MICROSOFT_CLIENT_ID`
 - `MICROSOFT_CLIENT_SECRET`

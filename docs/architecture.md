@@ -17,4 +17,4 @@ Company mentions are linked to each channel-neutral conversation. A new web conv
 
 ## Demo versus connected mode
 
-Without credentials the application provides a deterministic ABC Manufacturing scenario. With Supabase, OpenAI, and Microsoft credentials it exposes the live OAuth and Graph webhook boundaries. Credential persistence and subscription processing must only be enabled after applying the migration and configuring encryption.
+Without credentials the application provides a deterministic ABC Manufacturing scenario. With Supabase, Azure OpenAI, and Microsoft credentials it exposes the live OAuth and Graph webhook boundaries. The model gateway can also use direct OpenAI for development, but Azure takes precedence when configured. Credential persistence and subscription processing must only be enabled after applying the migration and configuring encryption.
