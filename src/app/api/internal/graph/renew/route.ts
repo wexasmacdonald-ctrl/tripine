@@ -15,6 +15,12 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const expected = env.INTERNAL_JOB_SECRET ?? env.CRON_SECRET;
   if (!expected || request.headers.get("authorization") !== `Bearer ${expected}`) return Response.json({ error: "Unauthorized" }, { status: 401 });
-  const recreated = await recreateMailboxSubscriptions();
-  return Response.json({ recreated });
+  try {
+    const recreated = await recreateMailboxSubscriptions();
+    return Response.json({ recreated });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Graph subscription reconciliation failed";
+    console.error("graph_subscription_reconciliation_failed", { message });
+    return Response.json({ error: message }, { status: 500 });
+  }
 }

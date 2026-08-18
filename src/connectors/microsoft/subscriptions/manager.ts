@@ -57,7 +57,7 @@ export async function recreateMailboxSubscriptions() {
     if (!connection.provider_account_id) continue;
     const accessToken = await getValidMicrosoftToken(connection.id);
     const resource = `users/${connection.provider_account_id}/mailFolders('Inbox')/messages`;
-    const existing = await graphFetch<{ value?: Array<{ id: string; resource: string }> }>(accessToken, "/subscriptions?$top=100");
+    const existing = await graphFetch<{ value?: Array<{ id: string; resource: string }> }>(accessToken, "/subscriptions");
     const matching = (existing.value ?? []).filter((subscription) => subscription.resource.toLowerCase() === resource.toLowerCase());
 
     for (const subscription of matching) {

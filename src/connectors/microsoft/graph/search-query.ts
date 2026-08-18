@@ -40,7 +40,7 @@ export function buildMicrosoftSearchQueries(subject: string | undefined, content
   const subjectTerms = unique(tokens(subject ?? ""));
   const bodyTerms = unique(tokens(content));
   const candidates = unique([...subjectTerms, ...bodyTerms]);
-  const fileTerms = subjectTerms.length >= 2 ? subjectTerms.slice(0, 4) : bodyFileTerms(candidates);
+  const fileTerms = bodyFileTerms(subjectTerms.length >= 2 ? subjectTerms : candidates);
   const emailTerms = candidates.slice(0, 6);
   const fallback = "recent business";
   return {

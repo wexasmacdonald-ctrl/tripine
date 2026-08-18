@@ -22,6 +22,13 @@ describe("Microsoft workplace search queries", () => {
       .toEqual({ fileQuery: "ABC Manufacturing quote", emailQuery: "ABC Manufacturing quote Sarah replied installation" });
   });
 
+  it("does not overconstrain file search with email workflow wording after the document type", () => {
+    expect(buildMicrosoftSearchQueries(
+      "ABC quote final channel verification",
+      "Verify the latest shared ABC Manufacturing quote using live Microsoft files.",
+    ).fileQuery).toBe("ABC quote");
+  });
+
   it("matches a recently created root file without relying on search indexing", () => {
     expect(fileNameMatchesQuery("ABC Manufacturing Quote v3.txt", "ABC Manufacturing Quote v3")).toBe(true);
     expect(fileNameMatchesQuery("Unrelated Customer Contract.pdf", "ABC Manufacturing Quote v3")).toBe(false);
