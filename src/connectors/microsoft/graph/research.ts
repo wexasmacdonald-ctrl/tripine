@@ -4,43 +4,34 @@ import { graphFetch } from "./client";
 import { env } from "@/infrastructure/env";
 import { extractDocumentText, MAX_FILE_BYTES, supportsTextExtraction } from "@/connectors/microsoft/files/extract-text";
 import { buildMicrosoftSearchQueries, fileNameMatchesQuery } from "./search-query";
+import { dedupeLatestNamedFiles, DriveResource, rankAndMergeDriveHits } from "./drive-results";
 
 type MailSearch = { value?: Array<{ id: string; subject?: string; bodyPreview?: string; receivedDateTime?: string; from?: { emailAddress?: { name?: string; address?: string } } }> };
-type DriveResource = { id?: string; name?: string; webUrl?: string; lastModifiedDateTime?: string; size?: number; file?: { mimeType?: string }; parentReference?: { driveId?: string } };
 type SearchHit = { name?: string; summary?: string; resource?: DriveResource };
 type SearchResponse = { value?: Array<{ hitsContainers?: Array<{ hits?: SearchHit[] }> }> };
 type DriveSearchResponse = { value?: DriveResource[] };
 
-function mergeFileHits(...groups: SearchHit[][]) {
-  const seen = new Set<string>();
-  return groups.flat().filter((hit) => {
-    const resource = hit.resource;
-    const key = `${resource?.parentReference?.driveId ?? ""}:${resource?.id ?? hit.name ?? ""}`;
-    if (!resource?.id || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
 export async function researchMicrosoftContext(accessToken: string, subject: string | undefined, content: string) {
   const { emailQuery, fileQuery } = buildMicrosoftSearchQueries(subject, content);
   const mailPath = `/me/messages?${new URLSearchParams({ "$search": `\"${emailQuery.replaceAll('"', '')}\"`, "$select": "id,subject,bodyPreview,receivedDateTime,from", "$top": "8" })}`;
-  const fileSelect = "id,name,webUrl,lastModifiedDateTime,size,file,parentReference";
+  const fileSelect = "id,name,webUrl,lastModifiedDateTime,size,file,parentReference,remoteItem";
   const encodedFileQuery = encodeURIComponent(fileQuery.replaceAll("'", "''"));
-  const [mail, searchFiles, driveFiles, rootChildren] = await Promise.all([
+  const [mail, searchFiles, sharedDriveFiles, driveFiles, rootChildren] = await Promise.all([
     graphFetch<MailSearch>(accessToken, mailPath, { headers: { ConsistencyLevel: "eventual" } }).catch(() => ({ value: [] })),
     graphFetch<SearchResponse>(accessToken, "/search/query", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ requests: [{ entityTypes: ["driveItem"], query: { queryString: fileQuery }, from: 0, size: 8 }] }) }).catch(() => ({ value: [] })),
+    graphFetch<DriveSearchResponse>(accessToken, `/me/drive/search(q='${encodedFileQuery}')?${new URLSearchParams({ "$select": fileSelect, "$top": "8" })}`).catch(() => ({ value: [] })),
     graphFetch<DriveSearchResponse>(accessToken, `/me/drive/root/search(q='${encodedFileQuery}')?${new URLSearchParams({ "$select": fileSelect, "$top": "8" })}`).catch(() => ({ value: [] })),
     graphFetch<DriveSearchResponse>(accessToken, `/me/drive/root/children?${new URLSearchParams({ "$select": fileSelect, "$top": "50" })}`).catch(() => ({ value: [] })),
   ]);
   const indexedHits = searchFiles.value?.flatMap((value) => value.hitsContainers ?? []).flatMap((value) => value.hits ?? []) ?? [];
+  const sharedHits = (sharedDriveFiles.value ?? []).map((resource) => ({ name: resource.name, resource }));
   const directHits = (driveFiles.value ?? []).map((resource) => ({ name: resource.name, resource }));
   const recentRootHits = (rootChildren.value ?? []).filter((resource) => resource.name && fileNameMatchesQuery(resource.name, fileQuery)).map((resource) => ({ name: resource.name, resource }));
-  const hits = mergeFileHits(indexedHits, directHits, recentRootHits).slice(0, 8);
+  const hits = rankAndMergeDriveHits(fileQuery, indexedHits, sharedHits, directHits, recentRootHits).slice(0, 10);
   const readable = hits.filter((hit) => {
     const resource = hit.resource;
     return Boolean(resource?.id && resource.parentReference?.driveId && resource.name && supportsTextExtraction(resource.name, resource.file?.mimeType) && (resource.size ?? 0) <= MAX_FILE_BYTES);
-  }).slice(0, 3);
+  }).slice(0, 5);
   const extracted = await Promise.all(readable.map(async (hit) => {
     const resource = hit.resource!;
     try {
@@ -62,7 +53,7 @@ export async function researchMicrosoftContext(accessToken: string, subject: str
     query: fileQuery,
     emailQuery,
     emails: (mail.value ?? []).map((item) => ({ id: item.id, subject: item.subject, from: item.from?.emailAddress, receivedAt: item.receivedDateTime, excerpt: item.bodyPreview, sourceType: "outlook.message" })),
-    files: hits.map((hit) => extractedById.get(hit.resource?.id ?? "") ?? ({ id: hit.resource?.id, name: hit.resource?.name ?? hit.name, url: hit.resource?.webUrl, modifiedAt: hit.resource?.lastModifiedDateTime, excerpt: hit.summary, sourceType: "microsoft.search.snippet" })).map((item) => ({ ...item, sourceType: "sourceType" in item ? item.sourceType : "driveItem.content" })),
+    files: dedupeLatestNamedFiles(hits.map((hit) => extractedById.get(hit.resource?.id ?? "") ?? ({ id: hit.resource?.id, name: hit.resource?.name ?? hit.name, url: hit.resource?.webUrl, modifiedAt: hit.resource?.lastModifiedDateTime, excerpt: hit.summary, sourceType: "microsoft.search.snippet" })).map((item) => ({ ...item, sourceType: "sourceType" in item ? item.sourceType : "driveItem.content" }))),
   };
 }
 
