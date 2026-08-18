@@ -41,3 +41,32 @@ export async function renewDueSubscriptions() {
   }
   return renewed;
 }
+
+export async function recreateMailboxSubscriptions() {
+  const supabase = createAdminClient();
+  const { data: connections, error } = await supabase
+    .from("connections")
+    .select("id,provider_account_id")
+    .eq("provider", "microsoft")
+    .eq("owner_type", "service")
+    .eq("status", "connected");
+  if (error) throw new Error(`Could not load Microsoft service connections: ${error.message}`);
+
+  let recreated = 0;
+  for (const connection of connections ?? []) {
+    if (!connection.provider_account_id) continue;
+    const accessToken = await getValidMicrosoftToken(connection.id);
+    const resource = `users/${connection.provider_account_id}/mailFolders('Inbox')/messages`;
+    const existing = await graphFetch<{ value?: Array<{ id: string; resource: string }> }>(accessToken, "/subscriptions?$top=100");
+    const matching = (existing.value ?? []).filter((subscription) => subscription.resource.toLowerCase() === resource.toLowerCase());
+
+    for (const subscription of matching) {
+      await graphFetch<void>(accessToken, `/subscriptions/${encodeURIComponent(subscription.id)}`, { method: "DELETE" });
+      await supabase.from("graph_subscriptions").update({ status: "replaced" }).eq("external_id", subscription.id);
+    }
+
+    await createMailboxSubscription({ connectionId: connection.id, accountObjectId: connection.provider_account_id, accessToken });
+    recreated++;
+  }
+  return recreated;
+}

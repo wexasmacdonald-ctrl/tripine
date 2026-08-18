@@ -1,5 +1,5 @@
 import { env } from "@/infrastructure/env";
-import { renewDueSubscriptions } from "@/connectors/microsoft/subscriptions/manager";
+import { recreateMailboxSubscriptions, renewDueSubscriptions } from "@/connectors/microsoft/subscriptions/manager";
 import { processPendingDeliveries } from "@/infrastructure/delivery-inbox/processor";
 
 export async function GET(request: Request) {
@@ -10,4 +10,11 @@ export async function GET(request: Request) {
     processPendingDeliveries(10),
   ]);
   return Response.json({ renewed, recoveredDeliveries });
+}
+
+export async function POST(request: Request) {
+  const expected = env.INTERNAL_JOB_SECRET ?? env.CRON_SECRET;
+  if (!expected || request.headers.get("authorization") !== `Bearer ${expected}`) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const recreated = await recreateMailboxSubscriptions();
+  return Response.json({ recreated });
 }
