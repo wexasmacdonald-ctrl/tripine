@@ -6,6 +6,7 @@ const serverSchema = z.object({
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
   SUPABASE_SECRET_KEY: z.string().optional(),
+  MODEL_PROVIDER: z.enum(["openai", "azure-openai"]).default("openai"),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().default("gpt-5.6-terra"),
   AZURE_OPENAI_API_KEY: z.string().optional(),
@@ -25,7 +26,7 @@ const serverSchema = z.object({
   DEMO_ALLOWED_RECIPIENTS: z.string().optional(),
 }).superRefine((value, context) => {
   const azureValues = [value.AZURE_OPENAI_API_KEY, value.AZURE_OPENAI_ENDPOINT, value.AZURE_OPENAI_DEPLOYMENT];
-  if (azureValues.some(Boolean) && !azureValues.every(Boolean)) {
+  if (value.MODEL_PROVIDER === "azure-openai" && !azureValues.every(Boolean)) {
     context.addIssue({
       code: "custom",
       path: ["AZURE_OPENAI_ENDPOINT"],

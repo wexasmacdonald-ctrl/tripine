@@ -21,7 +21,7 @@ npm run build
 
 ## Cloud deployment
 
-Import this repository into Vercel. See [docs/cloud-setup.md](docs/cloud-setup.md) for Supabase, Azure OpenAI, and Microsoft Entra configuration.
+Import this repository into Vercel. See [docs/cloud-setup.md](docs/cloud-setup.md) for Supabase, OpenAI, and Microsoft Entra configuration. Azure OpenAI remains an optional production deployment target.
 
 ## Current vertical slice
 

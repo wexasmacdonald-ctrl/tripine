@@ -5,7 +5,7 @@ import { env } from "@/infrastructure/env";
 export type ModelProvider = "azure-openai" | "openai";
 
 export function getModelRuntime(): { client: OpenAI; model: string; provider: ModelProvider } | undefined {
-  if (env.AZURE_OPENAI_API_KEY && env.AZURE_OPENAI_ENDPOINT && env.AZURE_OPENAI_DEPLOYMENT) {
+  if (env.MODEL_PROVIDER === "azure-openai" && env.AZURE_OPENAI_API_KEY && env.AZURE_OPENAI_ENDPOINT && env.AZURE_OPENAI_DEPLOYMENT) {
     const baseURL = `${env.AZURE_OPENAI_ENDPOINT.replace(/\/+$/, "")}/openai/v1/`;
     return {
       client: new OpenAI({ apiKey: env.AZURE_OPENAI_API_KEY, baseURL }),
@@ -14,7 +14,7 @@ export function getModelRuntime(): { client: OpenAI; model: string; provider: Mo
     };
   }
 
-  if (env.OPENAI_API_KEY) {
+  if (env.MODEL_PROVIDER === "openai" && env.OPENAI_API_KEY) {
     return {
       client: new OpenAI({ apiKey: env.OPENAI_API_KEY }),
       model: env.OPENAI_MODEL,

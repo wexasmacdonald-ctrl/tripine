@@ -8,7 +8,7 @@ Current pickup list for the controlled Tripine feasibility demo. Do not paste pa
 - Licensed users exist for `alex@tripine.onmicrosoft.com` and `connor@tripine.onmicrosoft.com`.
 - The Supabase project, migrations, seed data, and owner membership exist.
 - GitHub and Vercel are connected at `https://tripine.vercel.app`.
-- Supabase, Azure OpenAI, tenant, callback, encryption, job, internal-identity, and recipient-allowlist settings are configured in Vercel.
+- Supabase, OpenAI, tenant, callback, encryption, job, internal-identity, and recipient-allowlist settings are configured in Vercel.
 - A single-tenant Entra app registration named `Tripine AI Employee Demo` was started.
 
 ## Your next 10-minute block
