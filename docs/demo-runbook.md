@@ -12,23 +12,22 @@ Tripine is not an integration dashboard. Alex is a persistent employee identity 
 
 Sarah is a license-free Exchange shared mailbox. Connor is its delegated member and can send controlled demo mail as Sarah. This gives the demo a separate client identity without consuming another Microsoft 365 license.
 
-## Validated five-minute flow
+## Outlook-first five-minute flow
 
-1. Show the shared OneDrive file `ABC Manufacturing Quote v3.txt`:
+Do not begin in Tripine. The product experience is Connor working with Alex through normal email. Open the dashboard only after the employee behaviour has already been proven, and only if approval or audit evidence needs to be shown.
+
+1. In Connor's Outlook, open Sarah's message about `ABC Manufacturing Quote v3` and show that Connor is in To and Alex is CC'd:
+   - Sarah says the $18,500 total looks current.
+   - Sarah asks whether installation is included and whether the September 30 validity date still applies.
+   - Alex does not reply because he was included only for awareness.
+2. Connor emails Alex directly in ordinary language: `Figure this out. Check the latest shared quote and tell me what we can verify.`
+3. Stay in Outlook. Show Alex's reply in the same email conversation:
    - Total: $18,500 CAD
    - Valid through: September 30, 2026
    - Installation: not included
-2. From Sarah, send Connor an email and CC Alex:
-   - Subject: `RE: ABC Manufacturing Quote v3`
-   - Sarah confirms that the $18,500 total looks current.
-   - Sarah asks whether installation is included and whether the September 30 validity date still applies.
-3. Show that Alex records the CC message but does not reply or assume an assignment.
-4. Connor emails Alex directly: `Did Sarah reply about the ABC Manufacturing quote? Cross-check it against the latest quote.`
-5. Alex searches Outlook and Microsoft files, then reports Sarah's exact questions and the matching quote terms.
-6. Open Tripine web chat and ask: `What did Sarah say about ABC, and how does it compare with the latest quote? Re-verify both the email and file now.`
-7. Show that the same Alex independently re-reads Sarah's email and the quote, gives the same answer, and records automatic email/file activity events.
-8. Show Connor's explicit public delegation. The Work panel contains the resulting task and commitment.
-9. Draft an external message to Sarah. Explain that approval binds the exact recipient, subject, body, and attachments. Approve it and show one copy in Alex's Sent Items.
+4. Connor forwards a separate supplier message to Alex with: `Take care of this and send me what you find.` Show that Alex separates Connor's instruction from the forwarded content.
+5. Connor sends a new email asking: `What's happening with ABC, and what are we still waiting on?` Alex answers from the same organizational context without Connor naming Outlook or OneDrive.
+6. Only after the Outlook story is complete, optionally open Tripine for no more than 30 seconds to show the exact approval payload and automatic event history.
 
 ## Expected cross-channel answer
 
